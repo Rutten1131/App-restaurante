@@ -48,13 +48,14 @@ export default function AdminLoginPage() {
 
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-              Correo Electrónico
+              Usuario
             </label>
             <input
-              type="email"
-              name="email"
+              type="text"
+              name="usuario"
               required
-              placeholder="admin@romaloja.com"
+              placeholder="Roma"
+              defaultValue="Roma"
               className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-3 text-xs text-[#f5f0e8] placeholder-[#8a8078]/50 focus:border-[#c9a84c] focus:outline-none transition-colors"
             />
           </div>
@@ -67,7 +68,7 @@ export default function AdminLoginPage() {
               type="password"
               name="password"
               required
-              placeholder="••••••••"
+              placeholder="admin123"
               className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-3 text-xs text-[#f5f0e8] placeholder-[#8a8078]/50 focus:border-[#c9a84c] focus:outline-none transition-colors"
             />
           </div>
@@ -83,7 +84,7 @@ export default function AdminLoginPage() {
 
         <div className="pt-2 border-t border-white/[0.06] text-center space-y-2">
           <p className="text-[11px] text-[#8a8078]">
-            Credenciales de acceso inicial: <strong className="text-[#f5f0e8]">admin@romaloja.com</strong> / <strong className="text-[#f5f0e8]">roma2025</strong>
+            Credenciales: <strong className="text-[#f5f0e8]">Usuario: Roma</strong> / <strong className="text-[#f5f0e8]">Contraseña: admin123</strong>
           </p>
           <div>
             <Link href="/" className="text-[11px] text-[#c9a84c] hover:underline">

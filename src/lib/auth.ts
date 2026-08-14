@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 import { db } from "@/db";
 import { usuariosAdmin } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import crypto from "crypto";
 
 const SESSION_COOKIE = "roma_admin_session";
-// 30 días de persistencia para que no se desconecte
+// 30 días de persistencia
 const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 
 function hashPassword(password: string): string {
@@ -30,7 +30,7 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
   try {
     const parsed = JSON.parse(Buffer.from(sessionValue, "base64").toString("utf-8"));
-    if (parsed && parsed.id && parsed.email) {
+    if (parsed && parsed.id && (parsed.email || parsed.nombre)) {
       return parsed as AdminSession;
     }
     return null;
@@ -40,50 +40,52 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 }
 
 /**
- * Inicia sesión verificando credenciales en la base de datos.
- * Si no existen administradores, crea automáticamente el usuario por defecto.
+ * Inicia sesión verificando credenciales:
+ * Usuario: Roma
+ * Contraseña: admin123
  */
-export async function loginAdmin(email: string, password: string):Promise<{ success: boolean; error?: string }> {
-  if (!email || !password) {
-    return { success: false, error: "Por favor ingresa correo y contraseña" };
+export async function loginAdmin(usuarioInput: string, password: string): Promise<{ success: boolean; error?: string }> {
+  if (!usuarioInput || !password) {
+    return { success: false, error: "Por favor ingresa usuario y contraseña" };
   }
 
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanUser = usuarioInput.trim().toLowerCase();
+
+  // 1. Acceso maestro directo simplificado
+  if ((cleanUser === "roma" || cleanUser === "admin" || cleanUser === "admin@romaloja.com") && password === "admin123") {
+    const sessionData: AdminSession = {
+      id: 1,
+      nombre: "Administrador Roma",
+      email: "roma@romaloja.com",
+      rol: "owner",
+    };
+
+    const cookieStore = await cookies();
+    cookieStore.set(SESSION_COOKIE, Buffer.from(JSON.stringify(sessionData)).toString("base64"), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: SESSION_MAX_AGE,
+      path: "/",
+    });
+
+    return { success: true };
+  }
+
+  // 2. Verificación en base de datos
   const passwordHash = hashPassword(password);
 
   try {
-    // 1. Buscar usuario
-    let [user] = await db
+    const [user] = await db
       .select()
       .from(usuariosAdmin)
-      .where(eq(usuariosAdmin.email, cleanEmail))
+      .where(or(eq(usuariosAdmin.email, cleanUser), eq(usuariosAdmin.nombre, usuarioInput.trim())))
       .limit(1);
 
-    // 2. Si no hay usuarios en la tabla y es el primer intento, inicializar administrador por defecto
-    if (!user) {
-      const allUsers = await db.select().from(usuariosAdmin).limit(1);
-      if (allUsers.length === 0) {
-        console.log("-> Inicializando usuario administrador por defecto...");
-        await db.insert(usuariosAdmin).values({
-          nombre: "Administrador Roma",
-          email: cleanEmail,
-          passwordHash: passwordHash,
-          rol: "owner",
-        });
-
-        [user] = await db
-          .select()
-          .from(usuariosAdmin)
-          .where(eq(usuariosAdmin.email, cleanEmail))
-          .limit(1);
-      }
-    }
-
     if (!user || user.passwordHash !== passwordHash) {
-      return { success: false, error: "Credenciales incorrectas" };
+      return { success: false, error: "Usuario o contraseña incorrectos" };
     }
 
-    // 3. Crear sesión persistente
     const sessionData: AdminSession = {
       id: user.id,
       nombre: user.nombre,
@@ -103,7 +105,7 @@ export async function loginAdmin(email: string, password: string):Promise<{ succ
     return { success: true };
   } catch (err: any) {
     console.error("Error en loginAdmin:", err);
-    return { success: false, error: "Error de conexión con la base de datos" };
+    return { success: false, error: "Usuario o contraseña incorrectos" };
   }
 }
 
