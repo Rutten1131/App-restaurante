@@ -2,8 +2,17 @@ import type { Metadata } from "next";
 import SiteLayoutWrapper from "@/components/SiteLayoutWrapper";
 import "./globals.css";
 
+const getBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "https://app-restaurante-rose.vercel.app";
+};
+
+const baseUrl = getBaseUrl();
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://roma-restaurante.com"),
+  metadataBase: new URL(baseUrl),
   title: {
     default: "Roma Restaurante Pizzería | Tradición Italiana en Loja",
     template: "%s | Roma Pizzería Loja",
@@ -32,7 +41,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "es_EC",
-    url: "https://roma-restaurante.com",
+    url: baseUrl,
     siteName: "Roma Restaurante Pizzería",
     title: "Roma Restaurante Pizzería | Tradición Italiana en Loja",
     description:
@@ -42,12 +51,14 @@ export const metadata: Metadata = {
         url: "/images/hero-pizza.jpg",
         width: 1200,
         height: 630,
+        type: "image/jpeg",
         alt: "Pizzas al Horno de Leña - Roma Restaurante Pizzería",
       },
       {
         url: "/images/logo-roma.jpg",
         width: 800,
         height: 800,
+        type: "image/jpeg",
         alt: "Logo Oficial Roma Restaurante Pizzería",
       },
     ],
