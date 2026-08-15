@@ -1,14 +1,28 @@
 "use server";
 
 import { registrarCliente } from "@/db/queries/clientes";
+import { buscarClientePorTelefono } from "@/db/queries/fidelizacion";
+import { normalizarTelefono } from "@/lib/normalizarTelefono";
 import { revalidatePath } from "next/cache";
 
 export async function crearClienteAction(formData: FormData) {
   const nombre = formData.get("nombre") as string;
-  const telefono = formData.get("telefono") as string;
+  const telefonoRaw = formData.get("telefono") as string;
   const email = formData.get("email") as string;
 
   if (!nombre) return;
+
+  const telefonoNorm = normalizarTelefono(telefonoRaw);
+
+  // Verificar si ya existe un cliente con ese teléfono (normalizado)
+  if (telefonoNorm) {
+    const existente = await buscarClientePorTelefono(telefonoNorm);
+    if (existente) {
+      // Ya existe, no duplicar
+      revalidatePath("/admin/clientes");
+      return;
+    }
+  }
 
   const randomNum = Math.floor(100 + Math.random() * 900);
   const numeroCliente = `cliente-${randomNum}`;
@@ -16,7 +30,7 @@ export async function crearClienteAction(formData: FormData) {
   await registrarCliente({
     numeroCliente,
     nombre,
-    telefono,
+    telefono: telefonoNorm || undefined,
     email,
   });
 
@@ -33,4 +47,3 @@ export async function guardarGoogleReviewUrlAction(formData: FormData) {
     revalidatePath("/fidelizacion");
   }
 }
-

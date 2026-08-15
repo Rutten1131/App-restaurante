@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/db";
 import { clientes, encuestas, resenas } from "@/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, or, sql } from "drizzle-orm";
+import { normalizarTelefono } from "@/lib/normalizarTelefono";
 
 let tablasIniciadas = false;
 
@@ -77,14 +78,36 @@ export async function setConfiguracion(clave: string, valor: string) {
 }
 
 /**
- * Busca cliente por teléfono, o null si no existe.
+ * Busca cliente por teléfono normalizado (soporta 593..., 09..., 9...).
  */
-export async function buscarClientePorTelefono(telefono: string) {
+export async function buscarClientePorTelefono(telefonoRaw: string) {
+  const telefonoNorm = normalizarTelefono(telefonoRaw);
+  if (!telefonoNorm) return null;
+
+  // Buscar con las 3 posibles variantes que pudieron haberse guardado
+  const sinCero = telefonoNorm.startsWith("0") ? telefonoNorm.slice(1) : telefonoNorm;
+  const con593 = "593" + sinCero;
+
   const [found] = await db
     .select()
     .from(clientes)
-    .where(eq(clientes.telefono, telefono))
+    .where(
+      or(
+        eq(clientes.telefono, telefonoNorm),
+        eq(clientes.telefono, sinCero),
+        eq(clientes.telefono, con593),
+      )
+    )
     .limit(1);
+
+  // Si encontramos uno guardado con formato viejo, actualizamos al formato normalizado
+  if (found && found.telefono !== telefonoNorm) {
+    await db
+      .update(clientes)
+      .set({ telefono: telefonoNorm })
+      .where(eq(clientes.id, found.id));
+  }
+
   return found ?? null;
 }
 
@@ -98,12 +121,17 @@ export async function upsertClienteFidelizacion(data: {
   email?: string | null;
   cumpleanios?: string | null;
 }): Promise<number> {
-  const existing = await buscarClientePorTelefono(data.telefono);
+  const telefonoNorm = normalizarTelefono(data.telefono);
+  if (!telefonoNorm) {
+    throw new Error("Teléfono inválido");
+  }
+
+  const existing = await buscarClientePorTelefono(telefonoNorm);
 
   if (existing) {
     await db
       .update(clientes)
-      .set({ nombre: data.nombre, ultimaVisita: new Date() })
+      .set({ nombre: data.nombre, ultimaVisita: new Date(), telefono: telefonoNorm })
       .where(eq(clientes.id, existing.id));
     return existing.id;
   }
@@ -114,7 +142,7 @@ export async function upsertClienteFidelizacion(data: {
   const result = await db.insert(clientes).values({
     numeroCliente,
     nombre: data.nombre,
-    telefono: data.telefono,
+    telefono: telefonoNorm,
     email: data.email || null,
     cumpleanios: data.cumpleanios ? new Date(data.cumpleanios) : null,
     ultimaVisita: new Date(),

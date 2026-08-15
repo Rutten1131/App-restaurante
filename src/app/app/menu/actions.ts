@@ -3,7 +3,8 @@
 import { db } from "@/db";
 import { pedidos, itemsPedido, clientes, facturas } from "@/db/schema";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
+import { normalizarTelefono } from "@/lib/normalizarTelefono";
 
 export interface ItemPedidoInput {
   platoId: number;
@@ -33,27 +34,37 @@ export async function crearPedidoOnlineAction(input: CrearPedidoOnlineInput) {
     // 1. Manejo del Cliente (CRM & Fidelización)
     let clienteId: number | null = null;
     const nombre = input.nombreCliente?.trim() || (input.modalidad === "mesa" ? `Mesa ${input.mesa || "Local"}` : "Cliente Mostrador");
-    const telefono = input.telefonoCliente?.trim() || null;
+    const telefonoNormalizado = normalizarTelefono(input.telefonoCliente);
 
-    if (telefono) {
-      // Buscar si ya existe por teléfono
+    if (telefonoNormalizado) {
+      // Buscar si ya existe por teléfono (normalizado)
+      // También buscar con variantes: "0967..." y "967..." por si se guardó sin normalizar antes
+      const sinCero = telefonoNormalizado.startsWith("0") ? telefonoNormalizado.slice(1) : telefonoNormalizado;
+      const con593 = "593" + sinCero;
+
       const [clienteExistente] = await db
         .select()
         .from(clientes)
-        .where(eq(clientes.telefono, telefono))
+        .where(
+          or(
+            eq(clientes.telefono, telefonoNormalizado),
+            eq(clientes.telefono, sinCero),
+            eq(clientes.telefono, con593),
+          )
+        )
         .limit(1);
 
       if (clienteExistente) {
         clienteId = clienteExistente.id;
-        // Actualizar última visita
+        // Actualizar última visita y normalizar el teléfono guardado
         await db
           .update(clientes)
-          .set({ ultimaVisita: new Date() })
+          .set({ ultimaVisita: new Date(), telefono: telefonoNormalizado })
           .where(eq(clientes.id, clienteId));
       }
     }
 
-    if (!clienteId && (input.nombreCliente || input.telefonoCliente)) {
+    if (!clienteId && (input.nombreCliente || telefonoNormalizado)) {
       // Crear nuevo cliente para el club de fidelización
       const randomNum = Math.floor(100 + Math.random() * 900);
       const numeroCliente = `cli-${randomNum}`;
@@ -61,7 +72,7 @@ export async function crearPedidoOnlineAction(input: CrearPedidoOnlineInput) {
       const [resCliente] = await db.insert(clientes).values({
         numeroCliente,
         nombre: nombre,
-        telefono: telefono,
+        telefono: telefonoNormalizado,
         ultimaVisita: new Date(),
       });
 
