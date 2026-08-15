@@ -287,7 +287,13 @@ export default async function AdminClientesPage() {
                         {c.numeroCliente}
                       </td>
                       <td className="py-3 px-2 font-semibold text-[#f5f0e8]">
-                        {c.nombre}
+                        <div>{c.nombre}</div>
+                        {c.platFavorito && (
+                          <div className="text-[10px] text-[#c9a84c] font-normal mt-0.5 flex items-center gap-1">
+                            <span className="px-1.5 py-0.2 bg-[#c9a84c]/15 rounded border border-[#c9a84c]/30 font-medium">Favorito: {c.platFavorito}</span>
+                            {c.pizzaPromoReclamada && <span className="text-emerald-400 font-semibold">• Promo activa</span>}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-2 text-[#8a8078]">
                         <div className="font-mono text-white/90">{c.telefono || "Sin teléfono"}</div>
