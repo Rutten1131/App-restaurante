@@ -57,7 +57,14 @@ export default function AppMenuClient({
 
   const cambiarVista = (nuevaVista: "carta" | "resumen") => {
     setVista(nuevaVista);
-    const url = nuevaVista === "resumen" ? "/app/menu?vista=resumen" : "/app/menu";
+    const params = new URLSearchParams(window.location.search);
+    if (nuevaVista === "resumen") {
+      params.set("vista", "resumen");
+    } else {
+      params.delete("vista");
+    }
+    const str = params.toString();
+    const url = str ? `/app/menu?${str}` : "/app/menu";
     window.history.pushState(null, "", url);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -103,6 +110,7 @@ export default function AppMenuClient({
   // Modalidad seleccionada (Mesa por defecto si viene por QR de mesa)
   const mesaDefecto = initialMesa || "1";
   const [modalidad, setModalidad] = useState<"mesa" | "llevar" | "delivery">("mesa");
+  const [isMesaBloqueada, setIsMesaBloqueada] = useState<boolean>(Boolean(initialMesa));
 
   // Formulario de Entrega / Mesa
   const [mesaNum, setMesaNum] = useState(mesaDefecto);
@@ -125,25 +133,27 @@ export default function AppMenuClient({
   } | null>(null);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
 
-  // Sincronizar parámetro mesa
+  // Sincronizar parámetro mesa y bloquear si vino por QR
   useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      setVista(params.get("vista") === "resumen" ? "resumen" : "carta");
-      const urlMesa = params.get("mesa");
-      if (urlMesa) {
-        setMesaNum(urlMesa);
-        setModalidad("mesa");
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-
     const params = new URLSearchParams(window.location.search);
     const urlMesa = params.get("mesa");
     if (urlMesa) {
       setMesaNum(urlMesa);
       setModalidad("mesa");
+      setIsMesaBloqueada(true);
     }
+
+    const handlePopState = () => {
+      const p = new URLSearchParams(window.location.search);
+      setVista(p.get("vista") === "resumen" ? "resumen" : "carta");
+      const m = p.get("mesa");
+      if (m) {
+        setMesaNum(m);
+        setModalidad("mesa");
+        setIsMesaBloqueada(true);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
@@ -693,58 +703,103 @@ export default function AppMenuClient({
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#c9a84c]">
                     ¿Dónde lo vas a disfrutar?
                   </h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setModalidad("mesa")}
-                      className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
-                        modalidad === "mesa"
-                          ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
-                          : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
-                      }`}
-                    >
-                      En Mesa
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalidad("llevar")}
-                      className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
-                        modalidad === "llevar"
-                          ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
-                          : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
-                      }`}
-                    >
-                      Para Llevar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalidad("delivery")}
-                      className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
-                        modalidad === "delivery"
-                          ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
-                          : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
-                      }`}
-                    >
-                      Delivery
-                    </button>
-                  </div>
+
+                  {isMesaBloqueada ? (
+                    <div className="bg-[#141210] border border-[#c9a84c]/40 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="w-9 h-9 rounded-xl bg-[#c9a84c] text-[#0a0908] font-bold text-sm flex items-center justify-center shadow-md shadow-[#c9a84c]/20">
+                          {mesaNum}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-[#f5f0e8]">
+                              Consumo en Salón · Mesa {mesaNum}
+                            </span>
+                            <span className="text-[10px] bg-[#2e7d32]/20 text-[#2e7d32] border border-[#2e7d32]/40 font-semibold px-2 py-0.5 rounded-full">
+                              QR Verificado
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#8a8078] mt-0.5">
+                            Tu pedido se enviará directamente a esta mesa.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setModalidad("mesa")}
+                        className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
+                          modalidad === "mesa"
+                            ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
+                            : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
+                        }`}
+                      >
+                        En Mesa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalidad("llevar")}
+                        className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
+                          modalidad === "llevar"
+                            ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
+                            : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
+                        }`}
+                      >
+                        Para Llevar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalidad("delivery")}
+                        className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
+                          modalidad === "delivery"
+                            ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
+                            : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
+                        }`}
+                      >
+                        Delivery
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Campos según Modalidad */}
                 <div className="grid sm:grid-cols-2 gap-4">
                   {modalidad === "mesa" && (
                     <div className="space-y-1.5 sm:col-span-2">
-                      <label className="text-[11px] font-semibold text-[#c9a84c] uppercase">
-                        Número de Mesa *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={mesaNum}
-                        onChange={(e) => setMesaNum(e.target.value)}
-                        placeholder="Ej. 5"
-                        className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
-                      />
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-semibold text-[#c9a84c] uppercase">
+                          Número de Mesa *
+                        </label>
+                        {isMesaBloqueada && (
+                          <span className="text-[10px] text-[#c9a84c] font-medium flex items-center gap-1">
+                            <span>🔒</span> Fijo por Código QR
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          readOnly={isMesaBloqueada}
+                          value={isMesaBloqueada ? `Mesa ${mesaNum}` : mesaNum}
+                          onChange={(e) => {
+                            if (!isMesaBloqueada) setMesaNum(e.target.value);
+                          }}
+                          placeholder="Ej. 5"
+                          className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none transition-all ${
+                            isMesaBloqueada
+                              ? "bg-[#141210] border border-[#c9a84c]/40 text-[#c9a84c] font-bold cursor-not-allowed select-none pl-4 pr-10 shadow-inner"
+                              : "bg-[#0a0908] border border-white/[0.08] text-white focus:border-[#c9a84c]"
+                          }`}
+                        />
+                        {isMesaBloqueada && (
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs opacity-70">
+                            🔒
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
 
