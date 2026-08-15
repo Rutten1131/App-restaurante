@@ -33,6 +33,7 @@ export async function emitirFacturaAction(formData: FormData) {
     });
 
     revalidatePath("/admin/facturas");
+    revalidatePath("/admin/pedidos");
     revalidatePath("/admin");
 
     return { ok: true, facturaId };

@@ -130,20 +130,7 @@ export async function crearPedidoOnlineAction(input: CrearPedidoOnlineInput) {
       });
     }
 
-    // 6. Generar Registro de Factura Simulada
-    const subtotal = total / 1.15;
-    const iva = total - subtotal;
-
-    await db.insert(facturas).values({
-      pedidoId: pedidoId,
-      clienteId: clienteId,
-      subtotal: subtotal.toFixed(2),
-      iva: iva.toFixed(2),
-      total: total.toFixed(2),
-      estado: "simulada",
-    });
-
-    // 7. Revalidar vistas del Admin en tiempo real
+    // 6. Revalidar vistas del Admin en tiempo real
     revalidatePath("/admin/pedidos");
     revalidatePath("/admin");
     revalidatePath("/admin/clientes");

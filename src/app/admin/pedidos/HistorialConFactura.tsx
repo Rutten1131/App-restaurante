@@ -62,15 +62,9 @@ export default function HistorialConFactura({
 
   const abrirModal = (p: PedidoFinalizado) => {
     setModalPedido(p);
-    if (p.clienteNombre && p.clienteNombre !== "CONSUMIDOR FINAL") {
-      setTipoCliente("con_datos");
-      setRazonSocial(p.clienteNombre);
-      setIdentificacion(p.clienteTelefono?.replace(/\D/g, "") || "");
-    } else {
-      setTipoCliente("consumidor_final");
-      setIdentificacion("9999999999999");
-      setRazonSocial("CONSUMIDOR FINAL");
-    }
+    setTipoCliente("consumidor_final");
+    setIdentificacion("9999999999999");
+    setRazonSocial("CONSUMIDOR FINAL");
     setEmail("");
     setFormaPago("01");
   };
@@ -80,9 +74,18 @@ export default function HistorialConFactura({
     if (tipo === "consumidor_final") {
       setIdentificacion("9999999999999");
       setRazonSocial("CONSUMIDOR FINAL");
+      setEmail("");
     } else {
       setIdentificacion("");
-      setRazonSocial(modalPedido?.clienteNombre || "");
+      setRazonSocial(
+        modalPedido?.clienteNombre &&
+        !modalPedido.clienteNombre.startsWith("Mesa ") &&
+        modalPedido.clienteNombre !== "CONSUMIDOR FINAL" &&
+        modalPedido.clienteNombre !== "Cliente Mostrador"
+          ? modalPedido.clienteNombre
+          : ""
+      );
+      setEmail("");
     }
   };
 
