@@ -3,6 +3,11 @@
 import { registrarCliente } from "@/db/queries/clientes";
 import { buscarClientePorTelefono } from "@/db/queries/fidelizacion";
 import { normalizarTelefono } from "@/lib/normalizarTelefono";
+import {
+  getEstadoConexionWhatsApp,
+  getQRCodeWhatsApp,
+  enviarMensajeWhatsApp,
+} from "@/lib/evolution/whatsapp";
 import { revalidatePath } from "next/cache";
 
 export async function crearClienteAction(formData: FormData) {
@@ -46,4 +51,34 @@ export async function guardarGoogleReviewUrlAction(formData: FormData) {
     revalidatePath("/admin/clientes");
     revalidatePath("/fidelizacion");
   }
+}
+
+/**
+ * Consulta el estado de conexión de WhatsApp en Evolution API.
+ */
+export async function consultarEstadoWhatsAppAction() {
+  return await getEstadoConexionWhatsApp();
+}
+
+/**
+ * Obtiene el código QR para conectar WhatsApp en Evolution API.
+ */
+export async function obtenerQRWhatsAppAction() {
+  return await getQRCodeWhatsApp();
+}
+
+/**
+ * Envía un mensaje de prueba a +593 96 341 0409.
+ */
+export async function enviarPruebaWhatsAppAction() {
+  const mensaje = [
+    `🍕 *ROMA PIZZERÍA - PRUEBA DE CONEXIÓN WHATSAPP*`,
+    ``,
+    `✅ La integración con Evolution API está conectada y funcionando correctamente.`,
+    `🔔 Las opiniones críticas (1, 2 y 3 estrellas) llegarán a este número automáticamente en tiempo real.`,
+    ``,
+    `🕒 ${new Date().toLocaleDateString("es-EC")} ${new Date().toLocaleTimeString("es-EC")}`,
+  ].join("\n");
+
+  return await enviarMensajeWhatsApp("593963410409", mensaje);
 }

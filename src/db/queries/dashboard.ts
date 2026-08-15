@@ -26,6 +26,7 @@ export interface DashboardMetrics {
 
   // Resumen Pedidos
   pedidosHoy: number;
+  pedidosNuevos: number;
   pedidosEnCocina: number;
   pedidosListos: number;
   pedidosEntregados: number;
@@ -99,6 +100,7 @@ export async function getDashboardData(): Promise<DashboardMetrics> {
       .select({
         total: sql<number>`count(*)`,
         totalIngresos: sql<number>`COALESCE(SUM(CAST(${pedidos.total} AS DECIMAL(10,2))), 0)`,
+        nuevos: sql<number>`SUM(CASE WHEN ${pedidos.estado} = 'recibido' THEN 1 ELSE 0 END)`,
         enCocina: sql<number>`SUM(CASE WHEN ${pedidos.estado} = 'en_cocina' THEN 1 ELSE 0 END)`,
         listos: sql<number>`SUM(CASE WHEN ${pedidos.estado} = 'listo' THEN 1 ELSE 0 END)`,
         entregados: sql<number>`SUM(CASE WHEN ${pedidos.estado} = 'entregado' THEN 1 ELSE 0 END)`,
@@ -176,6 +178,7 @@ export async function getDashboardData(): Promise<DashboardMetrics> {
       promedioResenas: Number(Number(resenasStats?.avg || 5.0).toFixed(1)),
       totalResenas: Number(resenasStats?.count || 0),
       pedidosHoy: Number(pedidosStats?.total || 0),
+      pedidosNuevos: Number(pedidosStats?.nuevos || 0),
       pedidosEnCocina: Number(pedidosStats?.enCocina || 0),
       pedidosListos: Number(pedidosStats?.listos || 0),
       pedidosEntregados: Number(pedidosStats?.entregados || 0),
@@ -199,6 +202,7 @@ export async function getDashboardData(): Promise<DashboardMetrics> {
       promedioResenas: 5.0,
       totalResenas: 0,
       pedidosHoy: 0,
+      pedidosNuevos: 0,
       pedidosEnCocina: 0,
       pedidosListos: 0,
       pedidosEntregados: 0,

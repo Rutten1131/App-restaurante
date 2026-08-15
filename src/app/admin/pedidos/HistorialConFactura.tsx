@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { generarClaveAccesoSRI } from "@/lib/sri/claveAcceso";
 import { emitirFacturaAction } from "../facturas/actions";
+import { formatMesa } from "@/lib/formatMesa";
 import {
   IconAlertTriangle,
   IconCheck,
@@ -38,6 +39,8 @@ export default function HistorialConFactura({
 }: {
   pedidos: PedidoFinalizado[];
 }) {
+  const [tabFiltro, setTabFiltro] = useState<"todas" | "pendientes" | "facturadas">("todas");
+  const [filtroPeriodo, setFiltroPeriodo] = useState<"hoy" | "semana" | "mes" | "todo">("hoy");
   const [modalPedido, setModalPedido] = useState<PedidoFinalizado | null>(null);
   const [tipoCliente, setTipoCliente] = useState<"consumidor_final" | "con_datos">("consumidor_final");
   const [identificacion, setIdentificacion] = useState("9999999999999");
@@ -98,36 +101,42 @@ export default function HistorialConFactura({
 
     const fd = new FormData();
     fd.append("pedidoId", String(modalPedido.id));
-    fd.append("nombreCliente", razonSocial);
-    fd.append("identificacionCliente", identificacion);
-    fd.append("emailEnvioDestino", email);
+    fd.append("total", String(modalPedido.total));
     fd.append("subtotal", String(subtotal15));
     fd.append("iva", String(iva15));
-    fd.append("total", String(totalNum));
+    fd.append("tipoCliente", tipoCliente);
+    fd.append("identificacion", identificacion);
+    fd.append("razonSocial", razonSocial);
+    fd.append("email", email);
     fd.append("formaPago", formaPago);
-
-    const { claveAcceso, fechaFormato, secuencialFormato } = generarClaveAccesoSRI({
-      fechaEmision: new Date(),
-      ruc: "1104999999001",
-      ambiente: "1",
-      secuencial: modalPedido.id,
-    });
+    fd.append("estado", "oficial_sri");
 
     startTransition(async () => {
       await emitirFacturaAction(fd);
 
+      const sriData = generarClaveAccesoSRI({
+        fechaEmision: new Date(),
+        tipoComprobante: "01",
+        ruc: "1790011234001",
+        ambiente: "1",
+        establecimiento: "001",
+        puntoEmision: "001",
+        secuencial: modalPedido.id,
+        codigoNumerico: "12345678",
+      });
+
       setTicketActivo({
-        claveAcceso,
-        secuencial: secuencialFormato,
-        fecha: fechaFormato,
-        cliente: razonSocial,
-        identificacion,
+        claveAcceso: sriData.claveAcceso,
+        secuencial: sriData.secuencialFormato,
+        fecha: new Date().toLocaleDateString("es-EC") + " " + new Date().toLocaleTimeString("es-EC"),
+        cliente: razonSocial || "CONSUMIDOR FINAL",
+        identificacion: identificacion || "9999999999999",
         mesa: modalPedido.mesa,
         items: modalPedido.items.map((it) => ({
           cantidad: it.cantidad,
           nombre: it.platoNombre || "Plato Roma",
           precioUnitario: Number(it.precioUnitario),
-          total: Number(it.precioUnitario) * it.cantidad,
+          total: Number((Number(it.precioUnitario) * it.cantidad).toFixed(2)),
         })),
         subtotal: subtotal15,
         iva: iva15,
@@ -138,32 +147,33 @@ export default function HistorialConFactura({
     });
   };
 
-  const [tabFiltro, setTabFiltro] = useState<"todas" | "pendientes" | "facturadas">("todas");
-
   const abrirTicketExistente = (p: PedidoFinalizado) => {
     const tot = Number(p.total);
     const sub = Number((tot / 1.15).toFixed(2));
     const iv = Number((tot - sub).toFixed(2));
-
-    const { claveAcceso, fechaFormato, secuencialFormato } = generarClaveAccesoSRI({
+    const sriData = generarClaveAccesoSRI({
       fechaEmision: new Date(p.creadoEn),
-      ruc: "1104999999001",
+      tipoComprobante: "01",
+      ruc: "1790011234001",
       ambiente: "1",
+      establecimiento: "001",
+      puntoEmision: "001",
       secuencial: p.id,
+      codigoNumerico: "12345678",
     });
 
     setTicketActivo({
-      claveAcceso,
-      secuencial: secuencialFormato,
-      fecha: fechaFormato,
+      claveAcceso: sriData.claveAcceso,
+      secuencial: sriData.secuencialFormato,
+      fecha: new Date(p.creadoEn).toLocaleDateString("es-EC") + " " + new Date(p.creadoEn).toLocaleTimeString("es-EC"),
       cliente: p.clienteNombre || "CONSUMIDOR FINAL",
-      identificacion: p.clienteTelefono?.replace(/\D/g, "") || "9999999999999",
+      identificacion: "9999999999999",
       mesa: p.mesa,
       items: p.items.map((it) => ({
         cantidad: it.cantidad,
         nombre: it.platoNombre || "Plato Roma",
         precioUnitario: Number(it.precioUnitario),
-        total: Number(it.precioUnitario) * it.cantidad,
+        total: Number((Number(it.precioUnitario) * it.cantidad).toFixed(2)),
       })),
       subtotal: sub,
       iva: iv,
@@ -171,142 +181,250 @@ export default function HistorialConFactura({
     });
   };
 
-  const pedidosPendientes = pedidos.filter((p) => !p.facturaId);
-  const pedidosFacturados = pedidos.filter((p) => !!p.facturaId);
+  // Filtrado temporal
+  const pedidosFiltradosPorPeriodo = pedidos.filter((p) => {
+    if (filtroPeriodo === "todo") return true;
+    const fechaP = new Date(p.creadoEn);
+    const ahora = new Date();
+
+    if (filtroPeriodo === "hoy") {
+      return fechaP.toDateString() === ahora.toDateString();
+    }
+    if (filtroPeriodo === "semana") {
+      const hace7dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return fechaP >= hace7dias;
+    }
+    if (filtroPeriodo === "mes") {
+      return fechaP.getMonth() === ahora.getMonth() && fechaP.getFullYear() === ahora.getFullYear();
+    }
+    return true;
+  });
+
+  const pedidosPendientes = pedidosFiltradosPorPeriodo.filter((p) => !p.facturaId);
+  const pedidosFacturados = pedidosFiltradosPorPeriodo.filter((p) => !!p.facturaId);
 
   const pedidosMostrados =
     tabFiltro === "pendientes"
       ? pedidosPendientes
       : tabFiltro === "facturadas"
       ? pedidosFacturados
-      : pedidos;
+      : pedidosFiltradosPorPeriodo;
 
-  if (pedidos.length === 0) {
-    return (
-      <div className="text-center py-8 text-xs text-[#8a8078]">
-        No hay comandas entregadas registradas hoy.
-      </div>
-    );
-  }
+  const totalMontoFiltrado = pedidosMostrados.reduce((acc, p) => acc + Number(p.total), 0);
+
+  // Función para exportar a Excel (CSV con UTF-8 BOM)
+  const exportarExcel = () => {
+    const filas = pedidosMostrados.map((p) => {
+      const fecha = new Date(p.creadoEn).toLocaleDateString("es-EC");
+      const hora = new Date(p.creadoEn).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
+      const mesa = formatMesa(p.mesa);
+      const cliente = (p.clienteNombre || "Consumidor Final").replace(/;/g, ",");
+      const telefono = p.clienteTelefono || "";
+      const platos = p.items.map((it) => `${it.cantidad}x ${it.platoNombre || "Plato"}`).join(" | ").replace(/;/g, ",");
+      const total = Number(p.total).toFixed(2);
+      const estadoFactura = p.facturaId ? "Facturado SRI" : "Pendiente de Factura";
+
+      return `"${p.id}";"${fecha}";"${hora}";"${mesa}";"${cliente}";"${telefono}";"${platos}";"${total}";"${estadoFactura}"`;
+    });
+
+    const header = `"ID Comanda";"Fecha";"Hora";"Mesa / Destino";"Cliente";"Teléfono";"Detalle de Platos";"Total ($ USD)";"Estado Facturación"`;
+    const csvContent = "\uFEFF" + [header, ...filas].join("\r\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Historial_Comandas_Roma_${filtroPeriodo}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
-    <>
-      {/* Selector de Tabs / Alertas de Facturación */}
+    <div className="space-y-4">
+      {/* Selector de Período y Botón de Exportar a Excel */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTabFiltro("todas")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              tabFiltro === "todas"
-                ? "bg-white/[0.12] text-white border border-white/20"
-                : "text-[#8a8078] hover:text-white"
-            }`}
-          >
-            Todas ({pedidos.length})
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Filtro por fecha */}
+          <div className="flex items-center gap-1 p-1 bg-black/40 border border-white/10 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setFiltroPeriodo("hoy")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                filtroPeriodo === "hoy"
+                  ? "bg-[#c9a84c] text-[#0a0908] font-bold"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroPeriodo("semana")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                filtroPeriodo === "semana"
+                  ? "bg-[#c9a84c] text-[#0a0908] font-bold"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              Esta Semana
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroPeriodo("mes")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                filtroPeriodo === "mes"
+                  ? "bg-[#c9a84c] text-[#0a0908] font-bold"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              Este Mes
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroPeriodo("todo")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                filtroPeriodo === "todo"
+                  ? "bg-[#c9a84c] text-[#0a0908] font-bold"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              Todo el Historial
+            </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setTabFiltro("pendientes")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              tabFiltro === "pendientes"
-                ? "bg-[#c62828] text-white shadow-md shadow-red-900/30"
-                : pedidosPendientes.length > 0
-                ? "bg-[#c62828]/15 text-[#e53935] border border-[#c62828]/30 hover:bg-[#c62828]/25"
-                : "text-[#8a8078] hover:text-white"
-            }`}
-          >
-            <IconAlertTriangle className="w-3.5 h-3.5" />
-            <span>Falta Facturar ({pedidosPendientes.length})</span>
-          </button>
+          {/* Filtros de Facturación */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setTabFiltro("todas")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                tabFiltro === "todas"
+                  ? "bg-white/[0.12] text-white border border-white/20"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              Todas ({pedidosFiltradosPorPeriodo.length})
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setTabFiltro("facturadas")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              tabFiltro === "facturadas"
-                ? "bg-[#2e7d32] text-white shadow-md"
-                : "text-[#8a8078] hover:text-white"
-            }`}
-          >
-            <IconCheck className="w-3.5 h-3.5" />
-            <span>Facturadas ({pedidosFacturados.length})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setTabFiltro("pendientes")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                tabFiltro === "pendientes"
+                  ? "bg-[#c62828] text-white shadow-md shadow-red-900/30"
+                  : pedidosPendientes.length > 0
+                  ? "bg-[#c62828]/15 text-[#e53935] border border-[#c62828]/30 hover:bg-[#c62828]/25"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              <IconAlertTriangle className="w-3.5 h-3.5" />
+              <span>Falta Facturar ({pedidosPendientes.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTabFiltro("facturadas")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                tabFiltro === "facturadas"
+                  ? "bg-[#2e7d32] text-white shadow-md"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              <IconCheck className="w-3.5 h-3.5" />
+              <span>Facturadas ({pedidosFacturados.length})</span>
+            </button>
+          </div>
         </div>
 
-        {pedidosPendientes.length > 0 && (
-          <span className="text-[11px] text-[#c9a84c] font-semibold bg-[#c9a84c]/10 border border-[#c9a84c]/30 px-3 py-1 rounded-xl flex items-center gap-1.5">
-            <IconLightbulb className="w-3.5 h-3.5" /> Tienes {pedidosPendientes.length} comanda(s) lista(s) para emitir factura
+        {/* Total y Botón Exportar Excel */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-serif font-bold text-white hidden sm:inline">
+            Total Período: <strong className="text-[#c9a84c]">${totalMontoFiltrado.toFixed(2)}</strong>
           </span>
-        )}
+
+          <button
+            type="button"
+            onClick={exportarExcel}
+            className="px-4 py-2 bg-[#2e7d32] hover:bg-[#388e3c] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
+          >
+            <IconDownload className="w-3.5 h-3.5" />
+            <span>Descargar Excel (CSV)</span>
+          </button>
+        </div>
       </div>
 
-      <div className="overflow-x-auto max-h-[420px]">
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 bg-[#141210] z-10">
-            <tr className="border-b border-white/[0.06] text-[#8a8078] uppercase text-[10px] tracking-wider">
-              <th className="pb-3 px-2">Comanda</th>
-              <th className="pb-3 px-2">Hora</th>
-              <th className="pb-3 px-2">Destino / Mesa</th>
-              <th className="pb-3 px-2">Detalle de Platos</th>
-              <th className="pb-3 px-2 text-right">Total</th>
-              <th className="pb-3 px-2 text-center">Estado</th>
-              <th className="pb-3 px-2 text-center">Factura & Descarga</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.04]">
-            {pedidosMostrados.map((p) => {
-              const yaFacturado = !!p.facturaId;
+      {pedidosMostrados.length === 0 ? (
+        <div className="text-center py-10 text-xs text-[#8a8078] bg-black/20 rounded-2xl border border-white/[0.04]">
+          No hay comandas registradas en el período seleccionado.
+        </div>
+      ) : (
+        <div className="overflow-x-auto max-h-[420px]">
+          <table className="w-full text-left text-xs">
+            <thead className="sticky top-0 bg-[#141210] z-10">
+              <tr className="border-b border-white/[0.06] text-[#8a8078] uppercase text-[10px] tracking-wider">
+                <th className="pb-3 px-2">Comanda</th>
+                <th className="pb-3 px-2">Fecha y Hora</th>
+                <th className="pb-3 px-2">Destino / Mesa</th>
+                <th className="pb-3 px-2">Detalle de Platos</th>
+                <th className="pb-3 px-2 text-right">Total</th>
+                <th className="pb-3 px-2 text-center">Estado</th>
+                <th className="pb-3 px-2 text-center">Factura & Descarga</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {pedidosMostrados.map((p) => {
+                const yaFacturado = !!p.facturaId;
 
-              return (
-                <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="py-3 px-2 font-mono font-bold text-[#c9a84c]">
-                    #{p.id}
-                  </td>
-                  <td className="py-3 px-2 text-[#8a8078]">
-                    {new Date(p.creadoEn).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}
-                  </td>
-                  <td className="py-3 px-2 font-semibold text-[#f5f0e8]">
-                    {p.mesa ? `Mesa ${p.mesa}` : "Para Llevar / Domicilio"}
-                  </td>
-                  <td className="py-3 px-2 text-[#8a8078] max-w-[240px] truncate">
-                    {p.items.map((it) => `${it.cantidad}x ${it.platoNombre}`).join(", ")}
-                  </td>
-                  <td className="py-3 px-2 text-right font-serif font-bold text-[#f5f0e8]">
-                    ${Number(p.total).toFixed(2)}
-                  </td>
-                  <td className="py-3 px-2 text-center">
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#2e7d32]/20 text-[#2e7d32] border border-[#2e7d32]/30 inline-flex items-center gap-1">
-                      <IconCheck className="w-3 h-3" /> Entregado
-                    </span>
-                  </td>
-                  <td className="py-3 px-2 text-center">
-                    {yaFacturado ? (
-                      <button
-                        type="button"
-                        onClick={() => abrirTicketExistente(p)}
-                        className="px-3 py-1 bg-white/[0.06] hover:bg-[#c9a84c] hover:text-[#0a0908] text-[#c9a84c] text-[11px] font-bold rounded-xl border border-[#c9a84c]/40 transition-all flex items-center gap-1.5 mx-auto"
-                        title="Ver e Imprimir / Descargar Factura"
-                      >
-                        <IconDownload className="w-3.5 h-3.5" /> Ver / Descargar Ticket
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => abrirModal(p)}
-                        className="px-3.5 py-1.5 bg-[#c62828] hover:bg-[#e53935] text-white text-[11px] font-bold rounded-xl transition-all shadow-md shadow-red-900/30 flex items-center gap-1.5 mx-auto animate-pulse"
-                      >
-                        <IconAlertTriangle className="w-3.5 h-3.5" /> Falta Facturar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                return (
+                  <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-2 font-mono font-bold text-[#c9a84c]">
+                      #{p.id}
+                    </td>
+                    <td className="py-3 px-2 text-[#8a8078]" suppressHydrationWarning>
+                      {new Date(p.creadoEn).toLocaleDateString("es-EC")} {new Date(p.creadoEn).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="py-3 px-2 font-semibold text-[#f5f0e8]">
+                      {formatMesa(p.mesa)}
+                    </td>
+                    <td className="py-3 px-2 text-[#8a8078] max-w-[240px] truncate">
+                      {p.items.map((it) => `${it.cantidad}x ${it.platoNombre}`).join(", ")}
+                    </td>
+                    <td className="py-3 px-2 text-right font-serif font-bold text-[#f5f0e8]">
+                      ${Number(p.total).toFixed(2)}
+                    </td>
+                    <td className="py-3 px-2 text-center">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#2e7d32]/20 text-[#2e7d32] border border-[#2e7d32]/30 inline-flex items-center gap-1">
+                        <IconCheck className="w-3 h-3" /> Entregado
+                      </span>
+                    </td>
+                    <td className="py-3 px-2 text-center">
+                      {yaFacturado ? (
+                        <button
+                          type="button"
+                          onClick={() => abrirTicketExistente(p)}
+                          className="px-3 py-1 bg-white/[0.06] hover:bg-[#c9a84c] hover:text-[#0a0908] text-[#c9a84c] text-[11px] font-bold rounded-xl border border-[#c9a84c]/40 transition-all flex items-center gap-1.5 mx-auto"
+                          title="Ver e Imprimir / Descargar Factura"
+                        >
+                          <IconDownload className="w-3.5 h-3.5" /> Ver / Descargar Ticket
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => abrirModal(p)}
+                          className="px-3.5 py-1.5 bg-[#c62828] hover:bg-[#e53935] text-white text-[11px] font-bold rounded-xl transition-all shadow-md shadow-red-900/30 flex items-center gap-1.5 mx-auto animate-pulse"
+                        >
+                          <IconAlertTriangle className="w-3.5 h-3.5" /> Falta Facturar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ── MODAL: EMITIR FACTURA DESDE PEDIDOS ─────────────────── */}
       {modalPedido && (
@@ -318,7 +436,7 @@ export default function HistorialConFactura({
                   Emitir Comprobante de Venta
                 </h3>
                 <p className="text-xs text-[#8a8078]">
-                  Comanda #{modalPedido.id} {modalPedido.mesa ? `· Mesa ${modalPedido.mesa}` : "· Para Llevar"}
+                  Comanda #{modalPedido.id} · {formatMesa(modalPedido.mesa)}
                 </p>
               </div>
               <button onClick={() => setModalPedido(null)} className="text-white/40 hover:text-white p-1">
@@ -337,231 +455,267 @@ export default function HistorialConFactura({
               ))}
             </div>
 
-            {/* Selector Consumidor Final vs Con Datos */}
-            <div className="grid grid-cols-2 gap-2 p-1 bg-black/40 rounded-2xl border border-white/5">
-              <button
-                type="button"
-                onClick={() => handleTipoChange("consumidor_final")}
-                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                  tipoCliente === "consumidor_final"
-                    ? "bg-[#c9a84c] text-[#0a0908] shadow-md"
-                    : "text-white/60 hover:text-white"
-                }`}
-              >
-                <IconUser className="w-3.5 h-3.5" /> Consumidor Final
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTipoChange("con_datos")}
-                className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                  tipoCliente === "con_datos"
-                    ? "bg-[#c9a84c] text-[#0a0908] shadow-md"
-                    : "text-white/60 hover:text-white"
-                }`}
-              >
-                <IconBuilding className="w-3.5 h-3.5" /> Con Datos (RUC / Cédula)
-              </button>
+            {/* Tipo de Comprobante */}
+            <div className="space-y-2 text-xs">
+              <label className="text-[10px] uppercase text-[#c9a84c] font-bold block">
+                Tipo de Cliente
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTipoChange("consumidor_final")}
+                  className={`p-3 rounded-2xl border text-left transition-all flex items-center gap-2.5 ${
+                    tipoCliente === "consumidor_final"
+                      ? "bg-[#c9a84c]/10 border-[#c9a84c] text-[#c9a84c]"
+                      : "bg-black/40 border-white/5 text-[#8a8078] hover:text-white"
+                  }`}
+                >
+                  <IconUser className="w-4 h-4" />
+                  <div>
+                    <span className="font-bold block text-xs">Consumidor Final</span>
+                    <span className="text-[10px] opacity-70">Sin RUC / Cédula</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTipoChange("con_datos")}
+                  className={`p-3 rounded-2xl border text-left transition-all flex items-center gap-2.5 ${
+                    tipoCliente === "con_datos"
+                      ? "bg-[#c9a84c]/10 border-[#c9a84c] text-[#c9a84c]"
+                      : "bg-black/40 border-white/5 text-[#8a8078] hover:text-white"
+                  }`}
+                >
+                  <IconBuilding className="w-4 h-4" />
+                  <div>
+                    <span className="font-bold block text-xs">Con Datos SRI</span>
+                    <span className="text-[10px] opacity-70">RUC o Cédula</span>
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* Formulario datos del cliente */}
+            {/* Campos si es Con Datos */}
             {tipoCliente === "con_datos" && (
-              <div className="space-y-3 text-xs">
+              <div className="space-y-3 bg-black/40 border border-white/5 p-4 rounded-2xl text-xs">
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                    Cédula o RUC (10 o 13 dígitos) *
+                  <label className="text-[10px] uppercase text-[#8a8078] font-bold block mb-1">
+                    Cédula o RUC *
                   </label>
                   <input
                     type="text"
+                    required
                     value={identificacion}
                     onChange={(e) => setIdentificacion(e.target.value)}
-                    placeholder="Ej. 1104567890 o 1104567890001"
-                    className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
+                    placeholder="Ej. 1712345678 / 1790011234001"
+                    className="w-full bg-[#141210] border border-white/10 rounded-xl px-3.5 py-2 text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
                   />
-                  {identificacion.length > 0 && identificacion.length !== 10 && identificacion.length !== 13 && (
-                    <span className="text-[10px] text-red-400 mt-0.5 flex items-center gap-1">
-                      <IconAlertTriangle className="w-3 h-3" /> Debe tener 10 dígitos (Cédula) o 13 dígitos (RUC)
-                    </span>
-                  )}
                 </div>
+
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
+                  <label className="text-[10px] uppercase text-[#8a8078] font-bold block mb-1">
                     Razón Social / Nombre Completo *
                   </label>
                   <input
                     type="text"
+                    required
                     value={razonSocial}
                     onChange={(e) => setRazonSocial(e.target.value)}
-                    placeholder="Ej. Juan Pérez"
-                    className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
+                    placeholder="Ej. Juan Pérez / Empresa S.A."
+                    className="w-full bg-[#141210] border border-white/10 rounded-xl px-3.5 py-2 text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
                   />
-                  {razonSocial.trim().length === 0 && (
-                    <span className="text-[10px] text-red-400 mt-0.5 flex items-center gap-1">
-                      <IconAlertTriangle className="w-3 h-3" /> El nombre o razón social es obligatorio
-                    </span>
-                  )}
                 </div>
+
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                    Email (para enviar el RIDE / comprobante electrónico)
+                  <label className="text-[10px] uppercase text-[#8a8078] font-bold block mb-1">
+                    Correo para envío de Factura XML/PDF
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="cliente@gmail.com"
-                    className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
+                    placeholder="cliente@ejemplo.com"
+                    className="w-full bg-[#141210] border border-white/10 rounded-xl px-3.5 py-2 text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
                   />
                 </div>
               </div>
             )}
 
-            {/* Forma de Pago */}
-            <div className="text-xs space-y-1">
-              <label className="block text-[10px] uppercase font-bold text-[#c9a84c]">
-                Forma de Pago
+            {/* Forma de Pago SRI */}
+            <div className="space-y-2 text-xs">
+              <label className="text-[10px] uppercase text-[#c9a84c] font-bold block">
+                Forma de Pago SRI
               </label>
-              <select
-                value={formaPago}
-                onChange={(e) => setFormaPago(e.target.value)}
-                className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-              >
-                <option value="01">Efectivo</option>
-                <option value="20">Transferencia / Deuna</option>
-                <option value="19">Tarjeta de Débito / Crédito</option>
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormaPago("01")}
+                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all ${
+                    formaPago === "01"
+                      ? "bg-white/10 border-white text-white font-bold"
+                      : "bg-black/30 border-white/5 text-[#8a8078]"
+                  }`}
+                >
+                  <IconBanknotes className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Sin Sist. Financiero (Efectivo)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormaPago("19")}
+                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all ${
+                    formaPago === "19"
+                      ? "bg-white/10 border-white text-white font-bold"
+                      : "bg-black/30 border-white/5 text-[#8a8078]"
+                  }`}
+                >
+                  <IconCreditCard className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Tarjeta / Transf. (19)</span>
+                </button>
+              </div>
             </div>
 
             {/* Desglose Tributario */}
-            <div className="bg-black/40 border border-white/5 rounded-2xl p-4 space-y-1.5 text-xs">
+            <div className="bg-[#0a0908] border border-white/5 rounded-2xl p-3.5 space-y-1 text-xs">
               <div className="flex justify-between text-[#8a8078]">
-                <span>Subtotal Tarifa 15%</span>
+                <span>Subtotal Gravado (15%):</span>
                 <span className="font-mono">${subtotal15.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[#8a8078]">
-                <span>IVA 15%</span>
+                <span>IVA 15%:</span>
                 <span className="font-mono">${iva15.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-[#f5f0e8] border-t border-white/10 pt-1.5">
-                <span>Total a Facturar</span>
-                <span className="font-serif text-[#c9a84c]">${totalNum.toFixed(2)}</span>
+              <div className="flex justify-between text-[#f5f0e8] font-serif font-bold text-sm pt-1 border-t border-white/5">
+                <span>Total Comprobante:</span>
+                <span className="text-[#c9a84c]">${totalNum.toFixed(2)}</span>
               </div>
             </div>
 
-            {/* Botones */}
-            <div className="flex gap-3">
+            {/* Acciones */}
+            <div className="flex gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setModalPedido(null)}
-                className="flex-1 py-3 border border-white/10 rounded-2xl text-xs font-semibold text-white/60 hover:text-white transition-all"
+                className="flex-1 py-2.5 rounded-xl border border-white/10 text-xs font-semibold text-[#8a8078] hover:text-white"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleEmitir}
-                disabled={isPending || (tipoCliente === "con_datos" && (razonSocial.trim().length === 0 || (identificacion.length !== 10 && identificacion.length !== 13)))}
-                className="flex-[2] py-3 bg-[#c9a84c] hover:brightness-110 text-[#0a0908] font-bold text-xs rounded-2xl shadow-lg shadow-[#c9a84c]/20 transition-all uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                disabled={isPending}
+                className="flex-1 py-2.5 bg-[#c9a84c] text-[#0a0908] font-bold text-xs rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-1.5"
               >
-                {isPending ? "Generando..." : <><IconCheck className="w-4 h-4" /> Emitir Comprobante e Imprimir</>}
+                <IconCheck className="w-3.5 h-3.5" />
+                <span>{isPending ? "Generando..." : "Emitir & Guardar"}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── MODAL: TICKET TÉRMICO ─────────────────────────────── */}
+      {/* ── MODAL: TICKET TERMICO LISTO PARA IMPRIMIR / DESCARGAR PDF ── */}
       {ticketActivo && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white text-black rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl font-mono text-xs max-h-[90vh] overflow-y-auto">
-            <div className="text-center space-y-1 border-b-2 border-dashed border-black pb-3">
-              <h4 className="font-bold text-base tracking-wider uppercase">ROMA RESTAURANTE PIZZERÍA</h4>
-              <p className="text-[10px]">RUC: 1104999999001</p>
-              <p className="text-[10px]">Av. Eugenio Espejo 200-100 y Shuaras, Loja</p>
-              <p className="text-[10px]">Tel: 098 767 0140 · Tradición desde 2001</p>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white text-black p-6 rounded-3xl max-w-sm w-full font-mono text-[11px] space-y-3 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setTicketActivo(null)}
+              className="absolute top-4 right-4 text-black/40 hover:text-black text-sm"
+            >
+              ✕
+            </button>
+
+            <div className="text-center border-b border-dashed border-black/30 pb-3 space-y-0.5">
+              <span className="font-bold text-sm uppercase block font-serif">ROMA PIZZERÍA</span>
+              <span className="text-[10px] text-black/60 block">RUC: 1790011234001</span>
+              <span className="text-[10px] text-black/60 block">Av. Principal & Italia, Quito</span>
+              <span className="text-[10px] text-black/60 block font-bold text-emerald-800">
+                COMPROBANTE ELECTRÓNICO OFICIAL SRI
+              </span>
             </div>
 
-            <div className="space-y-0.5 text-[11px] border-b border-dashed border-black pb-2">
+            <div className="space-y-1 text-[10px] border-b border-dashed border-black/30 pb-2">
               <div className="flex justify-between">
-                <span>FACTURA:</span>
+                <span>No. Factura:</span>
                 <span className="font-bold">{ticketActivo.secuencial}</span>
               </div>
               <div className="flex justify-between">
-                <span>FECHA:</span>
+                <span>Fecha / Hora:</span>
                 <span>{ticketActivo.fecha}</span>
               </div>
               <div className="flex justify-between">
-                <span>CLIENTE:</span>
-                <span className="font-bold truncate max-w-[180px]">{ticketActivo.cliente}</span>
+                <span>Destino / Mesa:</span>
+                <span className="font-bold">{formatMesa(ticketActivo.mesa)}</span>
               </div>
               <div className="flex justify-between">
-                <span>RUC/C.I.:</span>
+                <span>Cliente:</span>
+                <span className="font-bold">{ticketActivo.cliente}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>RUC / Cédula:</span>
                 <span>{ticketActivo.identificacion}</span>
               </div>
-              {ticketActivo.mesa && (
-                <div className="flex justify-between">
-                  <span>UBICACIÓN:</span>
-                  <span className="font-bold">Mesa {ticketActivo.mesa}</span>
-                </div>
-              )}
             </div>
 
-            <div className="space-y-1 border-b-2 border-dashed border-black pb-3 text-[11px]">
-              <div className="flex justify-between font-bold border-b border-black pb-1">
-                <span>CANT / DESCRIPCIÓN</span>
-                <span>TOTAL</span>
+            {/* Platos */}
+            <div className="border-b border-dashed border-black/30 pb-2 space-y-1">
+              <div className="flex justify-between font-bold text-[10px]">
+                <span>Cant / Producto</span>
+                <span>Total</span>
               </div>
               {ticketActivo.items.map((it, idx) => (
-                <div key={idx} className="flex justify-between">
+                <div key={idx} className="flex justify-between text-[10px]">
                   <span>{it.cantidad}x {it.nombre}</span>
                   <span>${it.total.toFixed(2)}</span>
                 </div>
               ))}
             </div>
 
-            <div className="space-y-1 text-[11px] border-b-2 border-dashed border-black pb-3">
-              <div className="flex justify-between">
-                <span>SUBTOTAL (15%):</span>
+            {/* Totales */}
+            <div className="space-y-0.5 text-[10px]">
+              <div className="flex justify-between text-black/70">
+                <span>Subtotal 15%:</span>
                 <span>${ticketActivo.subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>IVA (15%):</span>
+              <div className="flex justify-between text-black/70">
+                <span>IVA 15%:</span>
                 <span>${ticketActivo.iva.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between font-bold text-sm border-t border-black pt-1">
-                <span>TOTAL A PAGAR:</span>
+              <div className="flex justify-between font-bold text-xs pt-1 border-t border-black/20">
+                <span>TOTAL USD:</span>
                 <span>${ticketActivo.total.toFixed(2)}</span>
               </div>
             </div>
 
-            <div className="text-[9px] space-y-1 text-center bg-gray-100 p-2 rounded">
-              <span className="font-bold block">CLAVE DE ACCESO SRI (49 DÍGITOS):</span>
-              <span className="break-all font-mono">{ticketActivo.claveAcceso}</span>
-              <span className="block text-[8px] text-gray-500 mt-1">Ambiente: Pruebas/Simulación</span>
+            {/* Clave de Acceso SRI */}
+            <div className="pt-2 border-t border-dashed border-black/30 text-center space-y-1">
+              <span className="text-[9px] uppercase font-bold text-black/60 block">Clave de Acceso SRI</span>
+              <div className="text-[8px] bg-black/5 p-1.5 rounded break-all tracking-wider">
+                {ticketActivo.claveAcceso}
+              </div>
+              <span className="text-[9px] text-black/50 block">Autorizado en línea por SRI</span>
             </div>
 
-            <div className="text-center text-[10px] italic">
-              ¡Gracias por preferir Roma Pizzería!
-            </div>
-
-            <div className="flex gap-2 pt-2 print:hidden">
-              <button
-                type="button"
-                onClick={() => setTicketActivo(null)}
-                className="flex-1 py-2 border border-gray-400 rounded-xl text-xs font-semibold hover:bg-gray-100"
-              >
-                Cerrar
-              </button>
+            {/* Acciones */}
+            <div className="flex gap-2 pt-3">
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex-1 py-2 bg-black text-white font-bold rounded-xl text-xs hover:bg-gray-800 flex items-center justify-center gap-1.5"
+                className="flex-1 py-2 bg-black text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 hover:bg-black/80"
               >
-                <IconPrinter className="w-3.5 h-3.5" /> Imprimir Ticket
+                <IconPrinter className="w-3.5 h-3.5" />
+                <span>Imprimir Ticket</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTicketActivo(null)}
+                className="px-4 py-2 border border-black/20 text-xs font-semibold rounded-xl"
+              >
+                Cerrar
               </button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

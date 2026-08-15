@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -27,36 +27,22 @@ interface AppMenuClientProps {
   initialMesa?: string;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  "Mariscos": "",
-  "Promociones": "",
-  "Pizzas": "",
-  "Ensaladas": "",
-  "Paninos": "",
-  "Spaghettis": "",
-  "Lasagnas": "",
-  "Sugerencias del Chef": "",
-  "Postres": "",
-  "Vinos": "",
-  "Bebidas Frías": "",
-  "Gaseosas": "",
-  "Cervezas": "",
-  "Bebidas Calientes": "",
-  "Línea Económica": "",
-};
-
-// Agrupación visual de categorías para navegación simplificada
-interface CategoryGroup {
-  label: string;
-  categoryNames: string[];
+// Helper para asignar imagen default de alta calidad a cada categoría
+function getCategoryImage(nombre: string): string {
+  const n = nombre.toLowerCase();
+  if (n.includes("pizza")) return "/images/hero-pizza.jpg";
+  if (n.includes("pasta") || n.includes("spaghetti")) return "/images/pasta.jpg";
+  if (n.includes("lasagna")) return "/images/lasagna.jpg";
+  if (n.includes("marisco") || n.includes("pescado") || n.includes("camaron")) return "/images/mariscos_dish_1786743970051.jpg";
+  if (n.includes("ensalada")) return "/images/ensalada_dish_1786743983137.jpg";
+  if (n.includes("panino") || n.includes("entrada")) return "/images/panino_dish_1786744000815.jpg";
+  if (n.includes("postre") || n.includes("dulce")) return "/images/postre_dish_1786744022960.jpg";
+  if (n.includes("bebida") || n.includes("vino") || n.includes("gaseosa") || n.includes("cerveza")) return "/images/vino_drinks_1786744045924.jpg";
+  if (n.includes("sugerencia") || n.includes("chef")) return "/images/chef-oven.jpg";
+  return "/images/hero-pizza.jpg";
 }
 
-const CATEGORY_GROUPS: CategoryGroup[] = [
-  { label: "Comida", categoryNames: ["Mariscos", "Pizzas", "Ensaladas", "Paninos", "Spaghettis", "Lasagnas", "Sugerencias del Chef", "Línea Económica"] },
-  { label: "Promociones", categoryNames: ["Promociones"] },
-  { label: "Bebidas & Vinos", categoryNames: ["Vinos", "Bebidas Frías", "Gaseosas", "Cervezas", "Bebidas Calientes"] },
-  { label: "Postres", categoryNames: ["Postres"] },
-];
+const BEBIDAS_NOMBRES = ["vinos", "bebidas frías", "bebidas frias", "gaseosas", "cervezas", "bebidas calientes", "bebidas"];
 
 export default function AppMenuClient({
   categorias,
@@ -69,7 +55,6 @@ export default function AppMenuClient({
   const initialVista = searchParams?.get("vista") === "resumen" ? "resumen" : "carta";
   const [vista, setVista] = useState<"carta" | "resumen">(initialVista);
 
-  // Sincronizar URL cuando cambia de vista para soportar slug/parámetro limpio
   const cambiarVista = (nuevaVista: "carta" | "resumen") => {
     setVista(nuevaVista);
     const url = nuevaVista === "resumen" ? "/app/menu?vista=resumen" : "/app/menu";
@@ -77,62 +62,60 @@ export default function AppMenuClient({
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Escuchar botón Atrás del navegador
-  useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      setVista(params.get("vista") === "resumen" ? "resumen" : "carta");
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  // Agrupación unificada de categorías:
+  // Combina Vinos, Bebidas Frías, Gaseosas, Cervezas, Bebidas Calientes en 1 sola categoría "Bebidas"
+  const categoriasUnificadas = useMemo(() => {
+    const comidas: { id: string | number; nombre: string; platos: Plato[]; imagenUrl: string }[] = [];
+    const platosBebidas: Plato[] = [];
+
+    for (const cat of categorias) {
+      const nombreNorm = cat.nombre.toLowerCase().trim();
+      if (BEBIDAS_NOMBRES.includes(nombreNorm)) {
+        platosBebidas.push(...(cat.platos || []));
+      } else {
+        comidas.push({
+          id: cat.id,
+          nombre: cat.nombre,
+          platos: cat.platos || [],
+          imagenUrl: getCategoryImage(cat.nombre),
+        });
+      }
+    }
+
+    if (platosBebidas.length > 0) {
+      comidas.push({
+        id: "bebidas-unificadas",
+        nombre: "Bebidas & Vinos",
+        platos: platosBebidas,
+        imagenUrl: "/images/vino_drinks_1786744045924.jpg",
+      });
+    }
+
+    return comidas;
+  }, [categorias]);
+
+  // Estado de navegación por categoría:
+  // null = cuadrícula de categorías (2 por fila con fotos)
+  // id = platos de esa categoría específica
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string | number | null>(null);
+  const [busqueda, setBusqueda] = useState("");
 
   // Modalidad seleccionada (Mesa por defecto si viene por QR de mesa)
-  const [modalidad, setModalidad] = useState<"mesa" | "llevar" | "delivery">(
-    initialMesa ? "mesa" : "mesa"
-  );
+  const mesaDefecto = initialMesa || "1";
+  const [modalidad, setModalidad] = useState<"mesa" | "llevar" | "delivery">("mesa");
 
   // Formulario de Entrega / Mesa
-  const [mesaNum, setMesaNum] = useState(initialMesa || "1");
+  const [mesaNum, setMesaNum] = useState(mesaDefecto);
   const [clienteNombre, setClienteNombre] = useState("");
   const [clienteTelefono, setClienteTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
   const [horaRetiro, setHoraRetiro] = useState("Lo antes posible (15-20 min)");
   const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [notasGenerales, setNotasGenerales] = useState("");
-
-  // Notas individuales por plato
   const [notasPorPlato, setNotasPorPlato] = useState<{ [platoId: number]: string }>({});
 
-  // Filtro de categoría y búsqueda
-  const [categoriaActiva, setCategoriaActiva] = useState<number | number[] | "todas">("todas");
-  const [grupoActivo, setGrupoActivo] = useState<string | null>(null);
-  const [busqueda, setBusqueda] = useState("");
-  const [mostrarTodasCategoriasGrid, setMostrarTodasCategoriasGrid] = useState(false);
-
-  // Helper: seleccionar un grupo de categorías
-  const seleccionarGrupo = (group: CategoryGroup) => {
-    const ids = categorias
-      .filter((c) => group.categoryNames.includes(c.nombre))
-      .map((c) => c.id);
-    setCategoriaActiva(ids);
-    setGrupoActivo(group.label);
-  };
-
-  const seleccionarTodas = () => {
-    setCategoriaActiva("todas");
-    setGrupoActivo(null);
-  };
-
-  const seleccionarCategoria = (catId: number) => {
-    setCategoriaActiva(catId);
-    setGrupoActivo(null);
-  };
-
-  // Carrito de compras en tiempo real
+  // Carrito de compras
   const [carrito, setCarrito] = useState<{ [platoId: number]: { plato: Plato; cantidad: number } }>({});
-
-  // Estado de envío y confirmación
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pedidoConfirmado, setPedidoConfirmado] = useState<{
     id: number;
@@ -141,6 +124,28 @@ export default function AppMenuClient({
     items: Array<{ nombre: string; cantidad: number; precio: string }>;
   } | null>(null);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+
+  // Sincronizar parámetro mesa
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      setVista(params.get("vista") === "resumen" ? "resumen" : "carta");
+      const urlMesa = params.get("mesa");
+      if (urlMesa) {
+        setMesaNum(urlMesa);
+        setModalidad("mesa");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+
+    const params = new URLSearchParams(window.location.search);
+    const urlMesa = params.get("mesa");
+    if (urlMesa) {
+      setMesaNum(urlMesa);
+      setModalidad("mesa");
+    }
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Agregar al carrito
   const agregarAlCarrito = (plato: Plato) => {
@@ -169,7 +174,7 @@ export default function AppMenuClient({
     });
   };
 
-  // Totales y Desglose Tributario (IVA 15%)
+  // Totales del carrito
   const itemsCarrito = Object.values(carrito);
   const totalCantidad = itemsCarrito.reduce((acc, item) => acc + item.cantidad, 0);
   const totalPrecio = itemsCarrito.reduce(
@@ -179,31 +184,29 @@ export default function AppMenuClient({
   const subtotal15 = Number((totalPrecio / 1.15).toFixed(2));
   const iva15 = Number((totalPrecio - subtotal15).toFixed(2));
 
-  // Total de platos en la carta (sin mostrar en UI)
-  const totalPlatosMenu = categorias.reduce((acc, cat) => acc + (cat.platos?.length || 0), 0);
+  // Categoría activa seleccionada
+  const catActual = categoriasUnificadas.find((c) => c.id === categoriaSeleccionada);
 
-  // Filtrado de platos
-  const categoriasFiltradas = categorias
-    .map((cat) => {
-      const platosFiltrados = (cat.platos || []).filter((p) => {
-        const matchBusqueda =
-          p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-          (p.descripcion && p.descripcion.toLowerCase().includes(busqueda.toLowerCase()));
-        return matchBusqueda;
-      });
+  // Búsqueda inteligente global
+  const esBusquedaActiva = busqueda.trim().length > 0;
+  const platosEncontradosPorBusqueda = useMemo(() => {
+    if (!esBusquedaActiva) return [];
+    const q = busqueda.toLowerCase().trim();
 
-      return {
-        ...cat,
-        platos: platosFiltrados,
-      };
-    })
-    .filter((cat) => {
-      if (categoriaActiva === "todas") return cat.platos.length > 0;
-      if (Array.isArray(categoriaActiva)) return categoriaActiva.includes(cat.id) && cat.platos.length > 0;
-      return cat.id === categoriaActiva && cat.platos.length > 0;
-    });
+    return categoriasUnificadas.flatMap((cat) =>
+      cat.platos
+        .filter((p) => {
+          return (
+            p.nombre.toLowerCase().includes(q) ||
+            (p.descripcion && p.descripcion.toLowerCase().includes(q)) ||
+            cat.nombre.toLowerCase().includes(q)
+          );
+        })
+        .map((p) => ({ ...p, categoriaNombre: cat.nombre }))
+    );
+  }, [busqueda, esBusquedaActiva, categoriasUnificadas]);
 
-  // Enviar Pedido directamente al Sistema de Cocina
+  // Enviar Pedido
   const handleEnviarPedidoFinal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (itemsCarrito.length === 0) return;
@@ -226,7 +229,6 @@ export default function AppMenuClient({
 
     const notasArray = [
       notasGenerales ? `Obs: ${notasGenerales}` : null,
-      modalidad === "llevar" && horaRetiro ? `Hora Retiro: ${horaRetiro}` : null,
     ].filter(Boolean);
 
     const payload = {
@@ -273,7 +275,7 @@ export default function AppMenuClient({
       } else {
         setErrorEnvio(res.error || "Ocurrió un error al procesar el pedido.");
       }
-    } catch (err: any) {
+    } catch {
       setErrorEnvio("Error de conexión con el servidor. Intenta de nuevo.");
     } finally {
       setIsSubmitting(false);
@@ -299,758 +301,600 @@ export default function AppMenuClient({
                 ROMA
               </span>
               <span className="text-[9px] uppercase tracking-widest text-[#2e7d32] font-bold">
-                {vista === "resumen" ? "Resumen de Pedido" : `Carta Completa · ${categorias.length} Categorías`}
+                {vista === "resumen" ? "Resumen de Pedido" : "Carta Digital & QR"}
               </span>
             </div>
           </Link>
 
           <div className="flex items-center gap-2">
-            {vista === "resumen" ? (
+            {vista === "resumen" && (
               <button
                 onClick={() => cambiarVista("carta")}
                 className="text-xs bg-white/[0.08] hover:bg-white/[0.15] text-[#f5f0e8] px-3 py-1.5 rounded-full font-semibold transition-all flex items-center gap-1"
               >
-                ← Volver a la Carta
+                ← Volver al Menú
               </button>
-            ) : (
-              <span className="text-xs bg-[#2e7d32]/15 text-[#2e7d32] border border-[#2e7d32]/30 px-3 py-1 rounded-full font-semibold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#2e7d32] animate-pulse" />
-                Cocina en Vivo
-              </span>
             )}
           </div>
         </div>
       </header>
 
       {/* ========================================================================= */}
-      {/* VISTA 1: EXPLORACIÓN DE LA CARTA (MENÚ COMPLETO)                         */}
+      {/* VISTA 1: EXPLORACIÓN DE LA CARTA                                         */}
       {/* ========================================================================= */}
       {vista === "carta" && (
         <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
-
-          {/* Buscador & Navegación de Menú */}
-          <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-4 sm:p-5 shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
-              <div>
-                <h1 className="font-serif text-xl sm:text-2xl font-bold text-[#f5f0e8]">
-                  Nuestra Carta
-                </h1>
-                <p className="text-xs text-[#8a8078]">
-                  Selecciona una categoría o busca tu plato favorito
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 sm:w-64">
-                  <input
-                    type="text"
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
-                    placeholder="Buscar plato, pizza, vino..."
-                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-3.5 py-2 text-xs text-[#f5f0e8] placeholder-[#8a8078] focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
-
+          {/* BUSCADOR SUPER INTELIGENTE (TODO EL MENÚ) */}
+          <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-4 sm:p-5 shadow-xl space-y-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="🔍 Busca cualquier plato en todo el menú (ej. Pepperoni, Lasagna, Vino...)"
+                className="w-full bg-[#0a0908] border border-white/[0.1] rounded-2xl px-4 py-3 text-xs sm:text-sm text-[#f5f0e8] placeholder-[#8a8078] focus:border-[#c9a84c] focus:outline-none"
+              />
+              {esBusquedaActiva && (
                 <button
                   type="button"
-                  onClick={() => setMostrarTodasCategoriasGrid(!mostrarTodasCategoriasGrid)}
-                  className="px-3 py-2 bg-white/[0.06] hover:bg-[#c9a84c] hover:text-[#0a0908] text-white border border-white/10 rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5"
-                  title="Ver todas las categorías"
+                  onClick={() => setBusqueda("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-white/[0.08] hover:bg-white/[0.15] text-xs text-white rounded-lg transition-colors"
                 >
-                  <span>{mostrarTodasCategoriasGrid ? "↔ Deslizar" : "⊞ Ver todas"}</span>
+                  ✕ Limpiar
                 </button>
-              </div>
+              )}
             </div>
 
-            {/* BARRA DESLIZABLE HORIZONTAL CON GRUPOS Y ACCESO RÁPIDO */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scroll-smooth no-scrollbar">
-                {/* Botón Todas */}
-                <button
-                  onClick={seleccionarTodas}
-                  className={`px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
-                    categoriaActiva === "todas"
-                      ? "bg-[#c9a84c] text-[#0a0908] shadow-md shadow-[#c9a84c]/20"
-                      : "bg-[#0a0908] border border-white/[0.08] text-[#8a8078] hover:text-[#f5f0e8] hover:border-white/20"
-                  }`}
-                >
-                  <span>✨</span> Todas
-                </button>
-
-                {/* Grupos de Categorías Principales */}
-                {CATEGORY_GROUPS.map((group) => {
-                  const isActivo = grupoActivo === group.label;
-
-                  return (
-                    <button
-                      key={group.label}
-                      onClick={() => seleccionarGrupo(group)}
-                      className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
-                        isActivo
-                          ? "bg-[#c9a84c] text-[#0a0908] shadow-md shadow-[#c9a84c]/20"
-                          : "bg-[#0a0908] border border-white/[0.08] text-[#8a8078] hover:text-[#f5f0e8] hover:border-white/20"
-                      }`}
-                    >
-                      <span>{group.label}</span>
-                    </button>
-                  );
-                })}
-
-                {/* Separador visual */}
-                <span className="w-px h-6 bg-white/[0.08] shrink-0" />
-
-                {/* Categorías individuales */}
-                {categorias.map((cat) => {
-                  const isActiva = !Array.isArray(categoriaActiva) && categoriaActiva === cat.id;
-
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => seleccionarCategoria(cat.id)}
-                      className={`px-3.5 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
-                        isActiva
-                          ? "bg-[#c9a84c] text-[#0a0908] shadow-md shadow-[#c9a84c]/20"
-                          : "bg-[#0a0908] border border-white/[0.08] text-[#8a8078] hover:text-[#f5f0e8] hover:border-white/20"
-                      }`}
-                    >
-                      <span>{cat.nombre}</span>
-                    </button>
-                  );
-                })}
+            {esBusquedaActiva && (
+              <div className="flex items-center justify-between text-xs text-[#8a8078] px-1">
+                <span>
+                  Resultados para &ldquo;<strong className="text-white">{busqueda}</strong>&rdquo;
+                </span>
+                <span className="text-[#c9a84c] font-semibold">
+                  {platosEncontradosPorBusqueda.length} platos encontrados
+                </span>
               </div>
-
-              <div className="flex items-center justify-between text-[11px] text-[#8a8078] px-1 pt-1">
-                <span>👈 Desliza para explorar 👉</span>
-                <button
-                  type="button"
-                  onClick={() => setMostrarTodasCategoriasGrid(true)}
-                  className="text-[#c9a84c] hover:underline font-semibold flex items-center gap-1"
-                >
-                  <span>⊞ Ver todas agrupadas</span>
-                </button>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* MODAL / BOTTOM SHEET ELEGANTE PARA EXPLORAR CATEGORÍAS */}
-          {mostrarTodasCategoriasGrid && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
-              <div
-                className="bg-[#141210] border border-white/[0.1] rounded-t-3xl sm:rounded-3xl p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto space-y-5 shadow-2xl animate-slideUp"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header del Modal */}
-                <div className="flex items-center justify-between border-b border-white/[0.08] pb-3 sticky top-0 bg-[#141210] z-10">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🍕</span>
-                    <h3 className="font-serif text-lg font-bold text-[#f5f0e8]">
-                      Categorías del Menú
-                    </h3>
-                  </div>
+          {/* CASO A: RESULTADOS DE BÚSQUEDA GLOBAL */}
+          {esBusquedaActiva ? (
+            <div className="space-y-4">
+              {platosEncontradosPorBusqueda.length === 0 ? (
+                <div className="text-center py-16 bg-[#141210] rounded-3xl border border-white/[0.06] text-xs text-[#8a8078] space-y-2">
+                  <p>No se encontraron platos que coincidan con &ldquo;{busqueda}&rdquo;.</p>
                   <button
-                    type="button"
-                    onClick={() => setMostrarTodasCategoriasGrid(false)}
-                    className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.15] text-[#8a8078] hover:text-white flex items-center justify-center text-sm font-bold transition-all"
+                    onClick={() => setBusqueda("")}
+                    className="text-[#c9a84c] underline font-semibold"
                   >
-                    ✕
+                    Ver todas las categorías
                   </button>
                 </div>
-
-                {/* Botón Ver Todo */}
-                <button
-                  onClick={() => {
-                    seleccionarTodas();
-                    setMostrarTodasCategoriasGrid(false);
-                  }}
-                  className={`w-full p-3 rounded-2xl border text-center font-bold text-xs transition-all flex items-center justify-center gap-2 ${
-                    categoriaActiva === "todas"
-                      ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908] shadow-lg shadow-[#c9a84c]/20"
-                      : "bg-[#0a0908] border-white/[0.08] text-[#f5f0e8] hover:border-[#c9a84c]/40"
-                  }`}
-                >
-                  <span className="text-base">✨</span>
-                  <span>Mostrar Toda la Carta ({totalPlatosMenu} Platos)</span>
-                </button>
-
-                {/* Secciones agrupadas de categorías */}
-                <div className="space-y-4 pt-1">
-                  {CATEGORY_GROUPS.map((group) => {
-                    const groupCats = categorias.filter((c) =>
-                      group.categoryNames.includes(c.nombre)
-                    );
-                    if (groupCats.length === 0) return null;
-
-                    const isGroupActive = grupoActivo === group.label;
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {platosEncontradosPorBusqueda.map((plato) => {
+                    const cantEnCarrito = carrito[plato.id]?.cantidad || 0;
 
                     return (
-                      <div key={group.label} className="space-y-2">
-                        {/* Cabecera del Grupo */}
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              seleccionarGrupo(group);
-                              setMostrarTodasCategoriasGrid(false);
-                            }}
-                            className="flex items-center gap-2 text-xs font-bold text-[#c9a84c] hover:underline"
-                          >
-                            <span>{group.label}</span>
-                            <span className="text-[10px] text-[#8a8078] font-normal">
-                              (Ver todo el grupo)
-                            </span>
-                          </button>
+                      <div
+                        key={plato.id}
+                        className="bg-[#141210] border border-white/[0.06] rounded-2xl overflow-hidden flex flex-col justify-between hover:border-[#c9a84c]/40 transition-all duration-300 shadow-lg group p-4 space-y-3"
+                      >
+                        <div className="relative h-44 -mx-4 -mt-4 mb-2 bg-[#181515] overflow-hidden">
+                          <Image
+                            src={plato.imagenUrl || "/images/hero-pizza.jpg"}
+                            alt={plato.nombre}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#141210] via-transparent to-transparent" />
+                          <span className="absolute top-3 left-3 bg-black/80 backdrop-blur-sm border border-white/10 text-white/80 text-[10px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full">
+                            {plato.categoriaNombre}
+                          </span>
+                          <span className="absolute top-3 right-3 bg-[#0a0908]/90 border border-[#c9a84c] text-[#c9a84c] font-serif font-bold text-sm px-3 py-1 rounded-full shadow">
+                            ${Number(plato.precio).toFixed(2)}
+                          </span>
                         </div>
 
-                        {/* Chips / Pills de Categorías del Grupo */}
-                        <div className="flex flex-wrap gap-2">
-                          {groupCats.map((cat) => {
-                            const isActiva =
-                              !Array.isArray(categoriaActiva) && categoriaActiva === cat.id;
+                        <div className="space-y-1.5 flex-1">
+                          <h3 className="font-serif text-base font-bold text-[#f5f0e8] group-hover:text-[#c9a84c] transition-colors leading-tight">
+                            {plato.nombre}
+                          </h3>
+                          {plato.descripcion && (
+                            <p className="text-xs text-[#8a8078] leading-relaxed line-clamp-2">
+                              {plato.descripcion}
+                            </p>
+                          )}
+                        </div>
 
-                            return (
+                        <div className="pt-2 flex items-center justify-between border-t border-white/[0.04]">
+                          {cantEnCarrito > 0 ? (
+                            <div className="flex items-center gap-2 bg-[#0a0908] border border-[#c9a84c]/40 rounded-xl p-1">
                               <button
-                                key={cat.id}
-                                onClick={() => {
-                                  seleccionarCategoria(cat.id);
-                                  setMostrarTodasCategoriasGrid(false);
-                                }}
-                                className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all ${
-                                  isActiva
-                                    ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908] shadow-md shadow-[#c9a84c]/20"
-                                    : "bg-[#0a0908] border-white/[0.08] text-[#f5f0e8] hover:border-[#c9a84c]/40 hover:bg-white/[0.03]"
-                                }`}
+                                onClick={() => quitarDelCarrito(plato.id)}
+                                className="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-[#c62828] text-white flex items-center justify-center font-bold text-sm transition-colors"
                               >
-                                <span>{cat.nombre}</span>
+                                -
                               </button>
-                            );
-                          })}
+                              <span className="font-mono font-bold text-xs px-2 text-[#c9a84c]">
+                                {cantEnCarrito}
+                              </span>
+                              <button
+                                onClick={() => agregarAlCarrito(plato)}
+                                className="w-7 h-7 rounded-lg bg-[#c9a84c] hover:brightness-110 text-[#0a0908] flex items-center justify-center font-bold text-sm transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => agregarAlCarrito(plato)}
+                              className="px-4 py-2 bg-white/[0.04] hover:bg-[#c9a84c] hover:text-[#0a0908] border border-white/[0.08] text-[#f5f0e8] text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5"
+                            >
+                              <span>+</span> Agregar
+                            </button>
+                          )}
+
+                          <span className="text-xs font-mono font-bold text-[#f5f0e8]">
+                            ${(Number(plato.precio) * (cantEnCarrito || 1)).toFixed(2)}
+                          </span>
                         </div>
                       </div>
                     );
                   })}
                 </div>
+              )}
+            </div>
+          ) : categoriaSeleccionada === null ? (
+            /* CASO B: SELECCIONAR CATEGORÍA (2 POR FILA CON FOTOS) */
+            <div className="space-y-4">
+              <div className="border-b border-white/[0.06] pb-3">
+                <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#f5f0e8]">
+                  Explora Nuestro Menú
+                </h1>
+                <p className="text-xs text-[#8a8078] mt-1">
+                  Elige una categoría para descubrir nuestras especialidades italianas
+                </p>
+              </div>
 
-                {/* Footer Modal */}
-                <div className="pt-2 border-t border-white/[0.06] text-center">
-                  <button
-                    type="button"
-                    onClick={() => setMostrarTodasCategoriasGrid(false)}
-                    className="text-xs text-[#8a8078] hover:text-white transition-colors"
-                  >
-                    Cerrar panel
-                  </button>
+              {/* GRID RESPONSIVO: 2 POR FILA EN MÓVIL, 3-4 EN TABLET Y ORDENADOR */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
+                {categoriasUnificadas.map((cat) => {
+                  const totalPlatos = cat.platos?.length || 0;
+
+                  return (
+                    <button
+                      key={String(cat.id)}
+                      type="button"
+                      onClick={() => {
+                        setCategoriaSeleccionada(cat.id);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="group bg-[#141210] border border-white/[0.08] hover:border-[#c9a84c] rounded-2xl sm:rounded-3xl overflow-hidden text-left transition-all duration-300 hover:scale-[1.02] shadow-2xl flex flex-col justify-between h-40 sm:h-52 md:h-56 relative"
+                    >
+                      {/* Imagen de Fondo de Portada */}
+                      <div className="absolute inset-0 bg-[#181515]">
+                        <Image
+                          src={cat.imagenUrl}
+                          alt={cat.nombre}
+                          fill
+                          className="object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-75"
+                        />
+                        {/* Gradiente Oscuro para Legibilidad */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0908] via-[#0a0908]/60 to-transparent" />
+                      </div>
+
+                      {/* Header de la Tarjeta */}
+                      <div className="relative z-10 p-3 sm:p-4 flex items-center justify-between">
+                        <span className="text-[10px] sm:text-xs text-[#c9a84c] font-mono font-bold bg-[#0a0908]/90 border border-[#c9a84c]/50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full backdrop-blur-sm shadow-md">
+                          {totalPlatos} {totalPlatos === 1 ? "plato" : "platos"}
+                        </span>
+                      </div>
+
+                      {/* Footer de la Tarjeta con Título */}
+                      <div className="relative z-10 p-3 sm:p-4 pt-0 space-y-0.5 sm:space-y-1">
+                        <h2 className="font-serif text-base sm:text-xl md:text-2xl font-bold text-[#f5f0e8] group-hover:text-[#c9a84c] transition-colors leading-tight drop-shadow-md line-clamp-1">
+                          {cat.nombre}
+                        </h2>
+                        <span className="text-[10px] sm:text-xs text-[#c9a84c] group-hover:text-white font-semibold transition-colors flex items-center gap-1">
+                          <span>Ver platos</span>
+                          <span className="group-hover:translate-x-1 transition-transform">→</span>
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* CASO C: PLATOS DE LA CATEGORÍA SELECCIONADA */
+            <div className="space-y-6">
+              {/* Barra de Retorno y Título de Categoría */}
+              <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-4 sm:p-5 shadow-xl flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoriaSeleccionada(null);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="px-4 py-2.5 bg-[#c9a84c] hover:brightness-110 text-[#0a0908] font-bold text-xs rounded-2xl transition-all shadow-md shadow-[#c9a84c]/20 flex items-center gap-1.5 uppercase tracking-wider shrink-0"
+                >
+                  <span>←</span> Cambiar de Categoría
+                </button>
+
+                <div className="text-right">
+                  <span className="font-serif text-lg sm:text-xl font-bold text-[#f5f0e8] block">
+                    {catActual?.nombre}
+                  </span>
+                  <span className="text-xs text-[#8a8078]">
+                    {catActual?.platos?.length || 0} platos disponibles
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Listado de Platos de la Carta */}
-          <div className="space-y-8">
-            {categoriasFiltradas.length === 0 ? (
-              <div className="text-center py-16 bg-[#141210] rounded-3xl border border-white/[0.06] text-xs text-[#8a8078]">
-                No se encontraron platos disponibles con ese filtro.
-              </div>
-            ) : (
-              categoriasFiltradas.map((cat) => {
-                return (
-                  <section key={cat.id} className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-                      <span className="font-serif text-xl font-bold text-[#c9a84c]">
-                        {cat.nombre}
-                      </span>
-                      <span className="text-xs text-[#8a8078]">
-                        {cat.platos?.length || 0} opciones
-                      </span>
-                    </div>
-
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {cat.platos?.map((plato) => {
-                        const cantEnCarrito = carrito[plato.id]?.cantidad || 0;
-
-                        return (
-                          <div
-                            key={plato.id}
-                            className="bg-[#141210] border border-white/[0.05] rounded-2xl overflow-hidden flex flex-col justify-between hover:border-[#c9a84c]/40 transition-all duration-300 shadow-lg group p-4 space-y-3"
-                          >
-                            <div className="relative h-44 -mx-4 -mt-4 mb-2 bg-[#181515] overflow-hidden">
-                              <Image
-                                src={plato.imagenUrl || "/images/hero-pizza.jpg"}
-                                alt={plato.nombre}
-                                fill
-                                className="object-cover group-hover:scale-105 transition-transform duration-500"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-[#141210] via-transparent to-transparent" />
-                              <span className="absolute top-3 right-3 bg-[#0a0908]/90 border border-[#c9a84c] text-[#c9a84c] font-serif font-bold text-sm px-3 py-1 rounded-full shadow">
-                                ${Number(plato.precio).toFixed(2)}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1.5 flex-1">
-                              <h3 className="font-serif text-base font-bold text-[#f5f0e8] group-hover:text-[#c9a84c] transition-colors leading-tight">
-                                {plato.nombre}
-                              </h3>
-
-                              {plato.descripcion && (
-                                <p className="text-xs text-[#8a8078] leading-relaxed line-clamp-2">
-                                  {plato.descripcion}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="pt-2 flex items-center justify-between border-t border-white/[0.04]">
-                              {cantEnCarrito > 0 ? (
-                                <div className="flex items-center gap-2 bg-[#0a0908] border border-[#c9a84c]/40 rounded-xl p-1">
-                                  <button
-                                    onClick={() => quitarDelCarrito(plato.id)}
-                                    className="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-[#c62828] text-white flex items-center justify-center font-bold text-sm transition-colors"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="font-mono font-bold text-xs px-2 text-[#c9a84c]">
-                                    {cantEnCarrito}
-                                  </span>
-                                  <button
-                                    onClick={() => agregarAlCarrito(plato)}
-                                    className="w-7 h-7 rounded-lg bg-[#c9a84c] hover:brightness-110 text-[#0a0908] flex items-center justify-center font-bold text-sm transition-colors"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => agregarAlCarrito(plato)}
-                                  className="px-4 py-2 bg-white/[0.04] hover:bg-[#c9a84c] hover:text-[#0a0908] border border-white/[0.08] text-[#f5f0e8] text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5"
-                                >
-                                  <span>🛒</span> Agregar
-                                </button>
-                              )}
-
-                              <span className="text-xs font-mono font-bold text-[#f5f0e8]">
-                                ${(Number(plato.precio) * (cantEnCarrito || 1)).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })
-            )}
-          </div>
-        </main>
-      )}
-
-      {/* ========================================================================= */}
-      {/* VISTA 2: PÁGINA DEDICADA DE RESUMEN DE PEDIDO (/app/menu?vista=resumen)   */}
-      {/* ========================================================================= */}
-      {vista === "resumen" && (
-        <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
-          {/* Header de la página de resumen */}
-          <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
-            <div>
-              <button
-                onClick={() => cambiarVista("carta")}
-                className="text-xs text-[#c9a84c] hover:underline flex items-center gap-1 mb-1 font-semibold"
-              >
-                ← Seguir agregando más platos
-              </button>
-              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#f5f0e8]">
-                Resumen de tu Pedido
-              </h1>
-              <p className="text-xs text-[#8a8078]">
-                Revisa los platos seleccionados, su detalle, y completa tus datos para enviar a cocina.
-              </p>
-            </div>
-
-            <div className="bg-[#141210] border border-[#c9a84c]/30 px-3.5 py-1.5 rounded-2xl text-right">
-              <span className="text-[10px] text-[#8a8078] uppercase block">Total Platos</span>
-              <span className="text-sm font-bold text-[#c9a84c]">{totalCantidad} items</span>
-            </div>
-          </div>
-
-          {/* 1. Lista Detallada de Platos con Información Completa */}
-          <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
-            <h2 className="font-serif text-lg font-bold text-[#f5f0e8] flex items-center gap-2 border-b border-white/[0.06] pb-3">
-              <span className="text-[#c9a84c]">📋</span> Platos Seleccionados ({itemsCarrito.length})
-            </h2>
-
-            {itemsCarrito.length === 0 ? (
-              <div className="text-center py-10 text-xs text-[#8a8078] space-y-3">
-                <p>No tienes ningún plato en tu pedido todavía.</p>
-                <button
-                  onClick={() => cambiarVista("carta")}
-                  className="px-4 py-2 bg-[#c9a84c] text-[#0a0908] font-bold rounded-xl text-xs"
-                >
-                  Ir a la Carta
-                </button>
-              </div>
-            ) : (
-              <div className="divide-y divide-white/[0.04] space-y-4">
-                {itemsCarrito.map((it) => {
-                  const itemSubtotal = Number(it.plato.precio) * it.cantidad;
+              {/* Grid de Platos de la Categoría */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {catActual?.platos?.map((plato) => {
+                  const cantEnCarrito = carrito[plato.id]?.cantidad || 0;
 
                   return (
                     <div
-                      key={it.plato.id}
-                      className="pt-4 space-y-2.5"
+                      key={plato.id}
+                      className="bg-[#141210] border border-white/[0.05] rounded-2xl overflow-hidden flex flex-col justify-between hover:border-[#c9a84c]/40 transition-all duration-300 shadow-lg group p-4 space-y-3"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-start gap-3">
-                          <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-[#0a0908] border border-white/10 shrink-0">
-                            <Image
-                              src={it.plato.imagenUrl || "/images/hero-pizza.jpg"}
-                              alt={it.plato.nombre}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <h4 className="font-serif font-bold text-base text-[#f5f0e8] leading-tight">
-                              {it.plato.nombre}
-                            </h4>
-                            {/* Información detallada / ingredientes del plato */}
-                            {it.plato.descripcion ? (
-                              <p className="text-xs text-[#8a8078] leading-relaxed max-w-md">
-                                {it.plato.descripcion}
-                              </p>
-                            ) : (
-                              <span className="text-[11px] text-[#8a8078] italic">
-                                Preparación clásica de la casa Roma
-                              </span>
-                            )}
-                            <span className="text-xs text-[#c9a84c] font-mono block pt-0.5">
-                              ${Number(it.plato.precio).toFixed(2)} c/u
-                            </span>
-                          </div>
-                        </div>
+                      <div className="relative h-44 -mx-4 -mt-4 mb-2 bg-[#181515] overflow-hidden">
+                        <Image
+                          src={plato.imagenUrl || "/images/hero-pizza.jpg"}
+                          alt={plato.nombre}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#141210] via-transparent to-transparent" />
+                        <span className="absolute top-3 right-3 bg-[#0a0908]/90 border border-[#c9a84c] text-[#c9a84c] font-serif font-bold text-sm px-3 py-1 rounded-full shadow">
+                          ${Number(plato.precio).toFixed(2)}
+                        </span>
+                      </div>
 
-                        {/* Controles +/- y subtotal */}
-                        <div className="flex items-center justify-between sm:justify-end gap-4 self-end sm:self-center">
-                          <div className="flex items-center gap-2 bg-[#0a0908] border border-white/10 rounded-xl p-1">
+                      <div className="space-y-1.5 flex-1">
+                        <h3 className="font-serif text-base font-bold text-[#f5f0e8] group-hover:text-[#c9a84c] transition-colors leading-tight">
+                          {plato.nombre}
+                        </h3>
+                        {plato.descripcion && (
+                          <p className="text-xs text-[#8a8078] leading-relaxed line-clamp-2">
+                            {plato.descripcion}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-2 flex items-center justify-between border-t border-white/[0.04]">
+                        {cantEnCarrito > 0 ? (
+                          <div className="flex items-center gap-2 bg-[#0a0908] border border-[#c9a84c]/40 rounded-xl p-1">
                             <button
-                              type="button"
-                              onClick={() => quitarDelCarrito(it.plato.id)}
-                              className="w-8 h-8 rounded-lg bg-white/[0.06] hover:bg-[#c62828] text-white flex items-center justify-center font-bold text-sm transition-colors"
+                              onClick={() => quitarDelCarrito(plato.id)}
+                              className="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-[#c62828] text-white flex items-center justify-center font-bold text-sm transition-colors"
                             >
                               -
                             </button>
-                            <span className="font-mono font-bold text-xs px-2.5 text-[#c9a84c]">
-                              {it.cantidad}
+                            <span className="font-mono font-bold text-xs px-2 text-[#c9a84c]">
+                              {cantEnCarrito}
                             </span>
                             <button
-                              type="button"
-                              onClick={() => agregarAlCarrito(it.plato)}
-                              className="w-8 h-8 rounded-lg bg-[#c9a84c] hover:brightness-110 text-[#0a0908] flex items-center justify-center font-bold text-sm transition-colors"
+                              onClick={() => agregarAlCarrito(plato)}
+                              className="w-7 h-7 rounded-lg bg-[#c9a84c] hover:brightness-110 text-[#0a0908] flex items-center justify-center font-bold text-sm transition-colors"
                             >
                               +
                             </button>
                           </div>
+                        ) : (
+                          <button
+                            onClick={() => agregarAlCarrito(plato)}
+                            className="px-4 py-2 bg-white/[0.04] hover:bg-[#c9a84c] hover:text-[#0a0908] border border-white/[0.08] text-[#f5f0e8] text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5"
+                          >
+                            <span>+</span> Agregar
+                          </button>
+                        )}
 
-                          <span className="font-serif font-bold text-base text-[#f5f0e8] min-w-[75px] text-right">
-                            ${itemSubtotal.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Campo opcional de nota específica para este plato */}
-                      <div className="pl-0 sm:pl-19">
-                        <input
-                          type="text"
-                          value={notasPorPlato[it.plato.id] || ""}
-                          onChange={(e) =>
-                            setNotasPorPlato({
-                              ...notasPorPlato,
-                              [it.plato.id]: e.target.value,
-                            })
-                          }
-                          placeholder="Nota para este plato: ej. sin cebolla, bien cocido, salsa aparte..."
-                          className="w-full bg-[#0a0908] border border-white/[0.06] rounded-xl px-3 py-1.5 text-[11px] text-[#f5f0e8] placeholder-[#8a8078]/70 focus:border-[#c9a84c] focus:outline-none"
-                        />
+                        <span className="text-xs font-mono font-bold text-[#f5f0e8]">
+                          ${(Number(plato.precio) * (cantEnCarrito || 1)).toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            )}
-          </div>
 
-          {/* 2. Desglose de Costos & Impuestos */}
-          <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-5 sm:p-6 shadow-xl space-y-3">
-            <h2 className="font-serif text-lg font-bold text-[#f5f0e8] flex items-center gap-2 border-b border-white/[0.06] pb-3">
-              <span className="text-[#c9a84c]">💵</span> Desglose de Costos
-            </h2>
-
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between text-[#8a8078]">
-                <span>Subtotal (Tarifa 15% IVA)</span>
-                <span className="font-mono">${subtotal15.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-[#8a8078]">
-                <span>IVA 15% (Incluido)</span>
-                <span className="font-mono">${iva15.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center text-lg font-bold text-[#f5f0e8] border-t border-white/10 pt-3">
-                <span>Total Final a Pagar</span>
-                <span className="font-serif text-2xl text-[#c9a84c]">
-                  ${totalPrecio.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Formulario de Entrega / Mesa & Confirmación */}
-          <form
-            onSubmit={handleEnviarPedidoFinal}
-            className="bg-[#141210] border border-white/[0.06] rounded-3xl p-5 sm:p-6 shadow-xl space-y-5"
-          >
-            <h2 className="font-serif text-lg font-bold text-[#f5f0e8] flex items-center gap-2 border-b border-white/[0.06] pb-3">
-              <span className="text-[#c9a84c]">📍</span> Datos para tu Orden
-            </h2>
-
-            {/* Modalidad Selector */}
-            <div className="space-y-2">
-              <label className="block text-[10px] uppercase font-bold text-[#c9a84c]">
-                Modalidad de Servicio
-              </label>
-              <div className="grid grid-cols-3 gap-2">
+              {/* Botón inferior de retorno a categorías */}
+              <div className="pt-6 text-center">
                 <button
                   type="button"
-                  onClick={() => setModalidad("mesa")}
-                  className={`py-2.5 text-xs font-bold rounded-xl border transition-all ${
-                    modalidad === "mesa"
-                      ? "bg-[#c62828] border-[#c62828] text-white shadow-md"
-                      : "bg-[#0a0908] border-white/10 text-[#8a8078]"
-                  }`}
+                  onClick={() => {
+                    setCategoriaSeleccionada(null);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="px-6 py-3 bg-white/[0.05] hover:bg-white/[0.1] text-[#c9a84c] border border-[#c9a84c]/30 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all"
                 >
-                  📍 En Mesa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalidad("llevar")}
-                  className={`py-2.5 text-xs font-bold rounded-xl border transition-all ${
-                    modalidad === "llevar"
-                      ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908] shadow-md"
-                      : "bg-[#0a0908] border-white/10 text-[#8a8078]"
-                  }`}
-                >
-                  🛍️ Para Llevar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalidad("delivery")}
-                  className={`py-2.5 text-xs font-bold rounded-xl border transition-all ${
-                    modalidad === "delivery"
-                      ? "bg-[#2e7d32] border-[#2e7d32] text-white shadow-md"
-                      : "bg-[#0a0908] border-white/10 text-[#8a8078]"
-                  }`}
-                >
-                  🛵 Domicilio
+                  ← Explorar Otra Categoría
                 </button>
               </div>
             </div>
-
-            <div className="grid sm:grid-cols-2 gap-4 text-xs">
-              {modalidad === "mesa" && (
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                    Número de Mesa *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={mesaNum}
-                    onChange={(e) => setMesaNum(e.target.value)}
-                    placeholder="Ej. 1, 2, 3..."
-                    className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
-              )}
-
-              <div className={modalidad !== "mesa" ? "sm:col-span-2" : ""}>
-                <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                  Tu Nombre o Apodo *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={clienteNombre}
-                  onChange={(e) => setClienteNombre(e.target.value)}
-                  placeholder="Ej. Juan Pérez"
-                  className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                  WhatsApp / Celular (Opcional)
-                </label>
-                <input
-                  type="tel"
-                  value={clienteTelefono}
-                  onChange={(e) => setClienteTelefono(e.target.value)}
-                  placeholder="098 767 0140"
-                  className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                  Forma de Pago
-                </label>
-                <select
-                  value={metodoPago}
-                  onChange={(e) => setMetodoPago(e.target.value)}
-                  className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-                >
-                  <option value="Efectivo">💵 Efectivo</option>
-                  <option value="Transferencia / Deuna">📱 Transferencia / Deuna (Banco Pichincha)</option>
-                  <option value="Tarjeta">💳 Tarjeta (en el local)</option>
-                </select>
-              </div>
-
-              {modalidad === "delivery" && (
-                <div className="sm:col-span-2">
-                  <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                    Dirección de Entrega en Loja *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={direccion}
-                    onChange={(e) => setDireccion(e.target.value)}
-                    placeholder="Calle, número de casa, barrio o referencia"
-                    className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
-              )}
-
-              {modalidad === "llevar" && (
-                <div className="sm:col-span-2">
-                  <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                    Hora estimada de Retiro
-                  </label>
-                  <input
-                    type="text"
-                    value={horaRetiro}
-                    onChange={(e) => setHoraRetiro(e.target.value)}
-                    placeholder="Ej. En 20 min / 8:30 PM"
-                    className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
-              )}
-
-              <div className="sm:col-span-2">
-                <label className="block text-[10px] uppercase font-bold text-[#c9a84c] mb-1">
-                  Observaciones Generales para Cocina (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={notasGenerales}
-                  onChange={(e) => setNotasGenerales(e.target.value)}
-                  placeholder="Ej. Gaseosa bien fría, servilletas extra..."
-                  className="w-full bg-[#0a0908] border border-white/10 rounded-xl px-3.5 py-2.5 text-white focus:border-[#c9a84c] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {errorEnvio && (
-              <div className="p-3.5 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs">
-                {errorEnvio}
-              </div>
-            )}
-
-            {/* Botón Principal de Confirmación */}
-            <div className="pt-2 flex flex-col sm:flex-row gap-3">
-              <button
-                type="button"
-                onClick={() => cambiarVista("carta")}
-                className="py-3.5 px-6 border border-white/10 rounded-2xl text-xs font-semibold text-white/70 hover:text-white transition-all text-center"
-              >
-                ← Seguir agregando platos
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || itemsCarrito.length === 0}
-                className="flex-1 py-3.5 px-6 bg-gradient-to-r from-[#c62828] via-[#e53935] to-[#c62828] hover:brightness-110 text-white font-bold text-sm rounded-2xl shadow-xl shadow-red-900/40 transition-all uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <span>🔥</span>
-                <span>{isSubmitting ? "Enviando a Cocina..." : `Confirmar y Enviar Pedido a Cocina ($${totalPrecio.toFixed(2)})`}</span>
-              </button>
-            </div>
-          </form>
+          )}
         </main>
       )}
 
-      {/* ── BARRA FLOTANTE INFERIOR EN MODO CARTA (VER RESUMEN DE PEDIDO) ── */}
-      {vista === "carta" && totalCantidad > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-40 p-4 bg-gradient-to-t from-black via-black/90 to-transparent">
-          <div className="max-w-4xl mx-auto">
-            <button
-              type="button"
-              onClick={() => cambiarVista("resumen")}
-              className="w-full bg-gradient-to-r from-[#c62828] via-[#e53935] to-[#c62828] text-white p-4 rounded-2xl shadow-2xl shadow-red-900/40 flex items-center justify-between font-bold text-sm hover:brightness-110 transition-all border border-red-500/30"
-            >
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-mono font-extrabold">
-                  {totalCantidad}
-                </span>
-                <span>🛒 Ver Resumen de mi Pedido</span>
+      {/* ========================================================================= */}
+      {/* VISTA 2: RESUMEN DE PEDIDO & DATOS DE ENVÍO / MESA                       */}
+      {/* ========================================================================= */}
+      {vista === "resumen" && (
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
+          <div className="bg-[#141210] border border-white/[0.08] rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <div className="border-b border-white/[0.06] pb-4">
+              <h1 className="font-serif text-2xl font-bold text-[#f5f0e8]">
+                Confirma tu Pedido
+              </h1>
+              <p className="text-xs text-[#8a8078] mt-1">
+                Revisa los platos seleccionados e indícanos dónde servirlo
+              </p>
+            </div>
+
+            {itemsCarrito.length === 0 ? (
+              <div className="text-center py-12 space-y-4">
+                <p className="text-xs text-[#8a8078]">Tu pedido está vacío.</p>
+                <button
+                  onClick={() => cambiarVista("carta")}
+                  className="px-6 py-2.5 bg-[#c9a84c] text-[#0a0908] rounded-2xl font-bold text-xs uppercase"
+                >
+                  Explorar la Carta
+                </button>
               </div>
-              <span className="font-serif text-lg font-extrabold text-[#c9a84c]">
-                ${totalPrecio.toFixed(2)} →
-              </span>
-            </button>
+            ) : (
+              <form onSubmit={handleEnviarPedidoFinal} className="space-y-6">
+                {/* Desglose de Platos */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#c9a84c]">
+                    Platos en tu Pedido ({totalCantidad})
+                  </h3>
+                  <div className="divide-y divide-white/[0.04] bg-[#0a0908] border border-white/[0.06] rounded-2xl p-4">
+                    {itemsCarrito.map((item) => (
+                      <div key={item.plato.id} className="py-3 first:pt-0 last:pb-0 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-bold text-white">
+                              {item.cantidad}x {item.plato.nombre}
+                            </span>
+                            <div className="text-[11px] text-[#8a8078]">
+                              ${Number(item.plato.precio).toFixed(2)} c/u
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold text-[#c9a84c]">
+                            ${(Number(item.plato.precio) * item.cantidad).toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Observación por plato */}
+                        <input
+                          type="text"
+                          placeholder="Nota (ej. sin orégano, bien dorado...)"
+                          value={notasPorPlato[item.plato.id] || ""}
+                          onChange={(e) =>
+                            setNotasPorPlato({
+                              ...notasPorPlato,
+                              [item.plato.id]: e.target.value,
+                            })
+                          }
+                          className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-1.5 text-[11px] text-white focus:border-[#c9a84c] focus:outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Selección de Modalidad */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#c9a84c]">
+                    ¿Dónde lo vas a disfrutar?
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setModalidad("mesa")}
+                      className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
+                        modalidad === "mesa"
+                          ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
+                          : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
+                      }`}
+                    >
+                      En Mesa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalidad("llevar")}
+                      className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
+                        modalidad === "llevar"
+                          ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
+                          : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
+                      }`}
+                    >
+                      Para Llevar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalidad("delivery")}
+                      className={`py-3 px-2 rounded-2xl text-xs font-bold border transition-all text-center ${
+                        modalidad === "delivery"
+                          ? "bg-[#c9a84c] border-[#c9a84c] text-[#0a0908]"
+                          : "bg-[#0a0908] border-white/[0.08] text-[#8a8078]"
+                      }`}
+                    >
+                      Delivery
+                    </button>
+                  </div>
+                </div>
+
+                {/* Campos según Modalidad */}
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {modalidad === "mesa" && (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-[11px] font-semibold text-[#c9a84c] uppercase">
+                        Número de Mesa *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={mesaNum}
+                        onChange={(e) => setMesaNum(e.target.value)}
+                        placeholder="Ej. 5"
+                        className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-[#c9a84c] uppercase">
+                      Tu Nombre *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={clienteNombre}
+                      onChange={(e) => setClienteNombre(e.target.value)}
+                      placeholder="Ej. Juan Pérez"
+                      className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-[#c9a84c] uppercase">
+                      Teléfono / WhatsApp
+                    </label>
+                    <input
+                      type="tel"
+                      value={clienteTelefono}
+                      onChange={(e) => setClienteTelefono(e.target.value)}
+                      placeholder="0991234567"
+                      className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                    />
+                  </div>
+
+                  {modalidad === "delivery" && (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-[11px] font-semibold text-[#c9a84c] uppercase">
+                        Dirección de Entrega *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={direccion}
+                        onChange={(e) => setDireccion(e.target.value)}
+                        placeholder="Calle principal, número y referencia..."
+                        className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-[#c9a84c] uppercase">
+                      Método de Pago
+                    </label>
+                    <select
+                      value={metodoPago}
+                      onChange={(e) => setMetodoPago(e.target.value)}
+                      className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                    >
+                      <option value="Efectivo">Efectivo</option>
+                      <option value="Transferencia">Transferencia Bancaria</option>
+                      <option value="Tarjeta">Tarjeta de Débito / Crédito</option>
+                      <option value="Deuna">Deuna / PayPhone</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Resumen de Totales */}
+                <div className="bg-[#0a0908] border border-white/[0.06] rounded-2xl p-4 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-[#8a8078]">
+                    <span>Subtotal (sin impuestos):</span>
+                    <span>${subtotal15.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[#8a8078]">
+                    <span>IVA (15%):</span>
+                    <span>${iva15.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-base font-bold text-[#c9a84c] pt-2 border-t border-white/[0.06]">
+                    <span>Total a Pagar:</span>
+                    <span>${totalPrecio.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {errorEnvio && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
+                    {errorEnvio}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-4 bg-[#c9a84c] hover:brightness-110 text-[#0a0908] font-bold text-sm uppercase tracking-wider rounded-2xl shadow-xl transition-all disabled:opacity-50"
+                >
+                  {isSubmitting ? "Enviando a Cocina..." : `Confirmar y Enviar Pedido · $${totalPrecio.toFixed(2)}`}
+                </button>
+              </form>
+            )}
           </div>
+        </main>
+      )}
+
+      {/* ========================================================================= */}
+      {/* BARRA FLOTANTE DEL CARRITO (SIEMPRE ACCESIBLE EN VISTA CARTA)            */}
+      {/* ========================================================================= */}
+      {vista === "carta" && totalCantidad > 0 && (
+        <div className="fixed bottom-6 inset-x-4 sm:inset-x-auto sm:right-6 sm:w-96 z-50 animate-slideUp">
+          <button
+            onClick={() => cambiarVista("resumen")}
+            className="w-full bg-[#c9a84c] hover:brightness-110 text-[#0a0908] p-4 rounded-3xl shadow-2xl flex items-center justify-between font-bold text-sm transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-full bg-[#0a0908] text-[#c9a84c] flex items-center justify-center text-xs">
+                {totalCantidad}
+              </span>
+              <span>Ver Pedido</span>
+            </div>
+            <span className="font-mono text-base">${totalPrecio.toFixed(2)} →</span>
+          </button>
         </div>
       )}
 
-      {/* ── MODAL: PEDIDO CONFIRMADO EN VIVO ──────────────────────────────── */}
+      {/* POPUP DE PEDIDO CONFIRMADO */}
       {pedidoConfirmado && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#141210] border border-[#2e7d32]/40 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl text-center">
-            <div className="w-16 h-16 bg-[#2e7d32]/20 border border-[#2e7d32]/50 text-[#2e7d32] rounded-full flex items-center justify-center text-3xl mx-auto animate-bounce">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141210] border border-[#c9a84c]/40 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-5 text-center shadow-2xl animate-scaleUp">
+            <div className="w-16 h-16 rounded-full bg-[#2e7d32]/20 border border-[#2e7d32]/40 text-[#2e7d32] text-2xl flex items-center justify-center mx-auto">
               ✓
             </div>
-
-            <h3 className="font-serif text-2xl font-bold text-[#f5f0e8]">
-              ¡Comanda Enviada a Cocina!
-            </h3>
-
-            <p className="text-xs text-[#8a8078] leading-relaxed">
-              Tu pedido <strong className="text-[#c9a84c]">#{pedidoConfirmado.id}</strong> fue recibido por el equipo de cocina de Roma Restaurante Pizzería y está en preparación.
-            </p>
-
-            <div className="bg-[#0a0908] p-3.5 rounded-2xl border border-white/5 text-left text-xs space-y-2">
-              <div className="flex justify-between text-[#8a8078]">
-                <span>Modalidad:</span>
+            <div className="space-y-1">
+              <h2 className="font-serif text-2xl font-bold text-[#f5f0e8]">
+                ¡Pedido #{pedidoConfirmado.id} Enviado!
+              </h2>
+              <p className="text-xs text-[#8a8078]">
+                Tu comanda ya entró directamente a la cocina de Roma Pizzería.
+              </p>
+            </div>
+            <div className="bg-[#0a0908] p-4 rounded-2xl border border-white/[0.06] text-xs space-y-1 text-left">
+              <div className="flex justify-between">
+                <span className="text-[#8a8078]">Destino:</span>
                 <span className="font-bold text-white">{pedidoConfirmado.modalidad}</span>
               </div>
-              <div className="flex justify-between text-[#8a8078]">
-                <span>Total a Pagar:</span>
-                <span className="font-serif font-bold text-[#c9a84c] text-sm">
-                  ${pedidoConfirmado.total}
-                </span>
-              </div>
-              <div className="border-t border-white/5 pt-2 space-y-1">
-                {pedidoConfirmado.items.map((it, idx) => (
-                  <div key={idx} className="flex justify-between text-[11px] text-[#f5f0e8]">
-                    <span>{it.cantidad}x {it.nombre}</span>
-                    <span className="font-mono text-[#8a8078]">${(Number(it.precio) * it.cantidad).toFixed(2)}</span>
-                  </div>
-                ))}
+              <div className="flex justify-between">
+                <span className="text-[#8a8078]">Total:</span>
+                <span className="font-bold text-[#c9a84c]">${pedidoConfirmado.total}</span>
               </div>
             </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setPedidoConfirmado(null)}
-                className="w-full py-3 bg-[#c9a84c] hover:brightness-110 text-[#0a0908] font-bold text-xs rounded-2xl shadow-lg shadow-[#c9a84c]/20 transition-all uppercase tracking-wider"
-              >
-                Hacer Otra Orden
-              </button>
-            </div>
+            <button
+              onClick={() => setPedidoConfirmado(null)}
+              className="w-full py-3 bg-[#c9a84c] text-[#0a0908] font-bold text-xs uppercase tracking-wider rounded-xl"
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}

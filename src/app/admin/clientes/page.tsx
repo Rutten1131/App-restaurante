@@ -33,6 +33,9 @@ function IcUsers({ className }: { className?: string }) {
 }
 
 
+import WhatsAppEvolutionCard from "./WhatsAppEvolutionCard";
+import AdminClientesListClient from "./AdminClientesListClient";
+
 export default async function AdminClientesPage() {
   const { clientes, alertas, resenas } = await getClientesConAlertas();
   const googleReviewUrl =
@@ -60,8 +63,8 @@ export default async function AdminClientesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
         <div>
           <div className="flex items-center gap-2 text-xs text-[#8a8078] mb-1">
-            <Link href="/admin" className="hover:text-[#c9a84c] transition-colors">
-              ← Volver al Dashboard
+            <Link href="/admin/resumen" className="hover:text-[#c9a84c] transition-colors">
+              ← Ver Dashboard & Métricas
             </Link>
           </div>
           <h1 className="font-serif text-3xl font-bold text-[#f5f0e8]">
@@ -91,35 +94,38 @@ export default async function AdminClientesPage() {
         </div>
       </div>
 
-      {/* CONFIGURACIÓN DEL ENLACE DE GOOGLE REVIEWS */}
-      <div className="bg-[#141210] border border-white/[0.08] rounded-3xl p-6 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
-          <div>
-            <h2 className="font-serif text-lg font-bold text-[#f5f0e8] flex items-center gap-2">
-              <IcLink className="w-4 h-4 text-[#c9a84c]" /> Configuración: Enlace de Reseñas de Google Maps
-            </h2>
-            <p className="text-xs text-[#8a8078] mt-0.5">
-              Cuando un cliente califique con 5 Estrellas, este será el enlace directo al que se le invitará a opinar.
-            </p>
-          </div>
-        </div>
+      {/* FILA COMPACTA: WHATSAPP EVOLUTION API & GOOGLE REVIEWS (MISMO NIVEL) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <WhatsAppEvolutionCard />
 
-        <form action={guardarGoogleReviewUrlAction} className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="url"
-            name="googleReviewUrl"
-            defaultValue={googleReviewUrl}
-            placeholder="https://g.page/r/... o https://search.google.com/local/writereview?placeid=..."
-            required
-            className="flex-1 bg-[#0a0908] border border-white/[0.1] rounded-2xl px-4 py-3 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="px-6 py-3 bg-[#c9a84c] hover:brightness-110 text-[#0a0908] font-bold text-xs rounded-2xl transition-all shadow-md shadow-[#c9a84c]/20 uppercase tracking-wider"
-          >
-            Guardar Enlace
-          </button>
-        </form>
+        {/* CONFIGURACIÓN DEL ENLACE DE GOOGLE REVIEWS */}
+        <div className="bg-[#141210] border border-white/[0.08] rounded-3xl p-6 shadow-xl flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+            <h2 className="font-serif text-base sm:text-lg font-bold text-[#f5f0e8] flex items-center gap-2">
+              <IcLink className="w-4 h-4 text-[#c9a84c]" /> Enlace de Reseñas de Google
+            </h2>
+            <span className="text-[11px] text-[#c9a84c] font-bold">5 Estrellas</span>
+          </div>
+
+          <form action={guardarGoogleReviewUrlAction} className="space-y-3">
+            <input
+              type="url"
+              name="googleReviewUrl"
+              defaultValue={googleReviewUrl}
+              placeholder="https://g.page/r/... o https://search.google.com/local/writereview?placeid=..."
+              required
+              className="w-full bg-[#0a0908] border border-white/[0.1] rounded-2xl px-4 py-3 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-[#c9a84c] hover:brightness-110 text-[#0a0908] font-bold text-xs rounded-2xl transition-all shadow-md shadow-[#c9a84c]/20 uppercase tracking-wider"
+              >
+                Guardar Enlace
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* CÓDIGO QR UNIFICADO OFICIAL */}
@@ -264,65 +270,8 @@ export default async function AdminClientesPage() {
             </div>
           </div>
 
-          {clientes.length === 0 ? (
-            <div className="text-center py-12 text-[#8a8078] text-xs">
-              No hay clientes registrados todavía.
-            </div>
-          ) : (
-            <div className="overflow-x-auto max-h-[500px]">
-              <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 bg-[#141210]">
-                  <tr className="border-b border-white/[0.06] text-[#8a8078] uppercase text-[10px] tracking-wider">
-                    <th className="pb-3 px-2">Código</th>
-                    <th className="pb-3 px-2">Nombre</th>
-                    <th className="pb-3 px-2">Contacto</th>
-                    <th className="pb-3 px-2">Fecha Registro</th>
-                    <th className="pb-3 px-2 text-right">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.04]">
-                  {clientes.map((c) => (
-                    <tr key={c.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="py-3 px-2 font-mono text-[#c9a84c]">
-                        {c.numeroCliente}
-                      </td>
-                      <td className="py-3 px-2 font-semibold text-[#f5f0e8]">
-                        <div>{c.nombre}</div>
-                        {c.platFavorito && (
-                          <div className="text-[10px] text-[#c9a84c] font-normal mt-0.5 flex items-center gap-1">
-                            <span className="px-1.5 py-0.2 bg-[#c9a84c]/15 rounded border border-[#c9a84c]/30 font-medium">Favorito: {c.platFavorito}</span>
-                            {c.pizzaPromoReclamada && <span className="text-emerald-400 font-semibold">• Promo activa</span>}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-2 text-[#8a8078]">
-                        <div className="font-mono text-white/90">{c.telefono || "Sin teléfono"}</div>
-                        <div className="text-[10px]">{c.email}</div>
-                      </td>
-                      <td className="py-3 px-2 text-[#8a8078]">
-                        {new Date(c.creadoEn).toLocaleDateString("es-EC")}
-                      </td>
-                      <td className="py-3 px-2 text-right">
-                        {c.telefono ? (
-                          <a
-                            href={`https://wa.me/${c.telefono.replace(/\D/g, "")}?text=Hola%20${encodeURIComponent(c.nombre)},%20te%20saludamos%20desde%20Roma%20Restaurante%20Pizzer%C3%ADa!`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] bg-[#2e7d32]/15 text-[#2e7d32] border border-[#2e7d32]/30 px-2.5 py-1 rounded-lg hover:bg-[#2e7d32]/30 transition-colors font-medium"
-                          >
-                            <IcMessageSquare className="w-3 h-3" />
-                            <span>WhatsApp</span>
-                          </a>
-                        ) : (
-                          <span className="text-[#8a8078] text-[10px]">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* Listado de Clientes Paginado */}
+          <AdminClientesListClient clientes={clientes} />
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import MesasQRManager from "./MesasQRManager";
 import {
   crearPlatoAction,
   actualizarPlatoAction,
@@ -32,22 +33,27 @@ interface Plato {
 interface AdminMenuClientProps {
   initialPlatos: Plato[];
   categorias: Categoria[];
+  initialTotalMesas?: number;
 }
 
 export default function AdminMenuClient({
   initialPlatos,
   categorias,
+  initialTotalMesas = 12,
 }: AdminMenuClientProps) {
+  const [tabPrincipal, setTabPrincipal] = useState<"platos" | "mesas">("platos");
   const [platos, setPlatos] = useState<Plato[]>(initialPlatos);
   const [editingPlato, setEditingPlato] = useState<Plato | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Filtros del catálogo
+  // Filtros del catálogo y paginación
   const [filtroCategoria, setFiltroCategoria] = useState<number | "todas">("todas");
   const [filtroBusqueda, setFiltroBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "disponibles" | "agotados">("todos");
+  const [limitePlatos, setLimitePlatos] = useState(10);
 
   // Filtrado de platos
   const platosFiltrados = platos.filter((plato) => {
@@ -89,359 +95,246 @@ export default function AdminMenuClient({
 
   return (
     <div className="min-h-screen bg-[#0a0908] text-[#f5f0e8] py-12 px-6">
-      <div className="max-w-6xl mx-auto space-y-10">
-        {/* Header con navegación de retorno */}
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
           <div>
             <div className="flex items-center gap-2 text-xs text-[#8a8078] mb-1">
-              <Link href="/admin" className="hover:text-[#c9a84c] transition-colors">
-                ← Volver al Panel de Control
+              <Link href="/admin/resumen" className="hover:text-[#c9a84c] transition-colors">
+                ← Ver Dashboard & Métricas
               </Link>
             </div>
             <h1 className="font-serif text-3xl font-bold text-[#f5f0e8]">
               Administración de Menú & Carta
             </h1>
             <p className="text-xs text-[#8a8078] mt-1">
-              Crea, actualiza precios, sube fotos y gestiona la disponibilidad de los platos en tiempo real.
+              Crea platos, actualiza precios, sube fotos y gestiona los códigos QR de cada mesa.
             </p>
           </div>
 
-          <button
-            onClick={() => setShowCategoryModal(true)}
-            className="px-4 py-2.5 bg-white/[0.04] border border-[#c9a84c]/40 text-[#c9a84c] rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-[#c9a84c] hover:text-[#0a0908] transition-all"
-          >
-            + Nueva Categoría
-          </button>
-        </div>
-
-        {/* Sección 1: Formulario de Creación de Plato */}
-        <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-4">
-            <h2 className="font-serif text-xl font-bold text-[#f5f0e8] flex items-center gap-2">
-              <span className="text-[#c9a84c]">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+          {tabPrincipal === "platos" && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2.5 bg-gradient-to-r from-[#c9a84c] to-[#e0c878] hover:brightness-110 text-[#0a0908] rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md shadow-[#c9a84c]/20 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
                   <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
-              </span>
-              <span>Registrar Nuevo Plato</span>
-            </h2>
-            <span className="text-[11px] text-[#8a8078]">
-              {categorias.length} categorías disponibles
-            </span>
-          </div>
-
-          <form
-            action={async (formData) => {
-              setIsSubmitting(true);
-              try {
-                await crearPlatoAction(formData);
-                const form = document.getElementById("crear-plato-form") as HTMLFormElement;
-                if (form) form.reset();
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
-            id="crear-plato-form"
-            className="space-y-6"
-          >
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {/* Nombre */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                  Nombre del Plato *
-                </label>
-                <input
-                  type="text"
-                  name="nombre"
-                  required
-                  placeholder="Ej. Pizza Quattro Formaggi"
-                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                />
-              </div>
-
-              {/* Precio */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                  Precio ($ USD) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="precio"
-                  required
-                  placeholder="8.50"
-                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                />
-              </div>
-
-              {/* Categoría */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                  Categoría
-                </label>
-                <select
-                  name="categoriaId"
-                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                >
-                  <option value="">Sin categoría asignada</option>
-                  {categorias.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.nombre} (Orden {cat.orden})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* URL de Imagen */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                  URL de Imagen (Opcional)
-                </label>
-                <input
-                  type="text"
-                  name="imagenUrl"
-                  placeholder="/images/hero-pizza.jpg o https://..."
-                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                />
-              </div>
-
-              {/* URL de Video */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                  URL de Video / Reel (Opcional)
-                </label>
-                <input
-                  type="text"
-                  name="videoUrl"
-                  placeholder="https://..."
-                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                />
-              </div>
-
-              {/* Estado Inicial */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                  Disponibilidad
-                </label>
-                <select
-                  name="disponible"
-                  defaultValue="true"
-                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                >
-                  <option value="true">Activo / Disponible</option>
-                  <option value="false">Agotado / No disponible</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Descripción */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                Descripción de Ingredientes / Receta
-              </label>
-              <textarea
-                name="descripcion"
-                rows={2}
-                placeholder="Detalla los ingredientes y preparación de la casa..."
-                className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-8 py-3 bg-[#c62828] hover:bg-[#e53935] text-white text-xs font-semibold uppercase tracking-widest rounded-xl transition-all shadow-md shadow-[#c62828]/20 disabled:opacity-50"
-            >
-              {isSubmitting ? "Guardando..." : "Guardar Plato"}
-            </button>
-          </form>
-        </div>
-
-        {/* Sección 2: Tabla de Platos Existentes con Filtros Avanzados */}
-        <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
-            <div>
-              <h2 className="font-serif text-xl font-bold text-[#f5f0e8] flex items-center gap-2">
-                <span className="text-[#c9a84c]">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                  </svg>
-                </span>
-                <span>Catálogo de Platos ({platos.length})</span>
-              </h2>
-              <p className="text-xs text-[#8a8078] mt-0.5">
-                Mostrando {platosFiltrados.length} de {platos.length} platos
-              </p>
-            </div>
-
-            {/* Barra de Filtros: Búsqueda, Categoría y Estado */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Buscador */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={filtroBusqueda}
-                  onChange={(e) => setFiltroBusqueda(e.target.value)}
-                  placeholder="Buscar plato..."
-                  className="bg-[#0a0908] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-[#f5f0e8] placeholder-[#8a8078] focus:border-[#c9a84c] focus:outline-none w-44 sm:w-52"
-                />
-                {filtroBusqueda && (
-                  <button
-                    onClick={() => setFiltroBusqueda("")}
-                    className="absolute right-2.5 top-1.5 text-xs text-[#8a8078] hover:text-white"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-
-              {/* Selector de Categoría */}
-              <select
-                value={filtroCategoria}
-                onChange={(e) =>
-                  setFiltroCategoria(
-                    e.target.value === "todas" ? "todas" : parseInt(e.target.value, 10)
-                  )
-                }
-                className="bg-[#0a0908] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-              >
-                <option value="todas">Todas las categorías ({categorias.length})</option>
-                {categorias.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.nombre}
-                  </option>
-                ))}
-              </select>
-
-              {/* Selector de Estado */}
-              <select
-                value={filtroEstado}
-                onChange={(e) =>
-                  setFiltroEstado(e.target.value as "todos" | "disponibles" | "agotados")
-                }
-                className="bg-[#0a0908] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-              >
-                <option value="todos">Todos los estados</option>
-                <option value="disponibles">Solo Disponibles</option>
-                <option value="agotados">Solo Agotados</option>
-              </select>
-            </div>
-          </div>
-
-          {platosFiltrados.length === 0 ? (
-            <div className="text-center py-12 text-[#8a8078] text-xs space-y-2">
-              <p>No se encontraron platos con los filtros seleccionados.</p>
-              {(filtroBusqueda || filtroCategoria !== "todas" || filtroEstado !== "todos") && (
-                <button
-                  onClick={() => {
-                    setFiltroBusqueda("");
-                    setFiltroCategoria("todas");
-                    setFiltroEstado("todos");
-                  }}
-                  className="text-[#c9a84c] hover:underline font-semibold text-xs"
-                >
-                  Limpiar filtros
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-white/[0.06] text-[#8a8078] uppercase text-[10px] tracking-wider">
-                    <th className="pb-3 px-3">Plato</th>
-                    <th className="pb-3 px-3">Categoría</th>
-                    <th className="pb-3 px-3">Precio</th>
-                    <th className="pb-3 px-3">Estado</th>
-                    <th className="pb-3 px-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.04]">
-                  {platosFiltrados.map((plato) => (
-                    <tr key={plato.id} className="hover:bg-white/[0.02] transition-colors">
-                      {/* Plato & Foto */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-3">
-                          <div className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#181515] border border-white/[0.08] shrink-0">
-                            <Image
-                              src={plato.imagenUrl || "/images/hero-pizza.jpg"}
-                              alt={plato.nombre}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                          <div>
-                            <span className="font-serif font-bold text-[#f5f0e8] block text-sm">
-                              {plato.nombre}
-                            </span>
-                            {plato.descripcion && (
-                              <span className="text-[11px] text-[#8a8078] block line-clamp-1 max-w-xs">
-                                {plato.descripcion}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Categoría */}
-                      <td className="py-3.5 px-3">
-                        <span className="bg-white/[0.04] text-[#c9a84c] px-2.5 py-1 rounded-md border border-white/[0.06] text-[11px]">
-                          {plato.categoria?.nombre || "Sin Categoría"}
-                        </span>
-                      </td>
-
-                      {/* Precio */}
-                      <td className="py-3.5 px-3 font-serif font-bold text-sm text-[#f5f0e8]">
-                        ${Number(plato.precio).toFixed(2)}
-                      </td>
-
-                      {/* Estado */}
-                      <td className="py-3.5 px-3">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleDisponible(plato.id)}
-                          title="Haz clic para alternar estado"
-                          className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-colors flex items-center gap-1.5 ${
-                            plato.disponible
-                              ? "bg-[#2e7d32]/20 text-[#2e7d32] border border-[#2e7d32]/40 hover:bg-[#2e7d32]/30"
-                              : "bg-[#c62828]/20 text-[#c62828] border border-[#c62828]/40 hover:bg-[#c62828]/30"
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              plato.disponible ? "bg-[#2e7d32]" : "bg-[#c62828]"
-                            }`}
-                          />
-                          {plato.disponible ? "Disponible" : "Agotado"}
-                        </button>
-                      </td>
-
-                      {/* Acciones */}
-                      <td className="py-3.5 px-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setEditingPlato(plato)}
-                            className="px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f0e8] rounded-lg border border-white/[0.06] transition-colors text-[11px]"
-                          >
-                            Editar
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleEliminar(plato.id, plato.nombre)}
-                            className="px-3 py-1.5 bg-[#c62828]/15 hover:bg-[#c62828]/30 text-[#c62828] rounded-lg border border-[#c62828]/30 transition-colors text-[11px]"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                <span>+ Registrar Nuevo Plato</span>
+              </button>
             </div>
           )}
         </div>
+
+        {/* Tabs de Navegación del Módulo */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2 p-1.5 bg-[#141210] border border-white/[0.08] rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setTabPrincipal("platos")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                tabPrincipal === "platos"
+                  ? "bg-[#c9a84c] text-[#0a0908] shadow-md shadow-[#c9a84c]/20"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              <span>Carta & Platos ({platos.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTabPrincipal("mesas")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                tabPrincipal === "mesas"
+                  ? "bg-[#c9a84c] text-[#0a0908] shadow-md shadow-[#c9a84c]/20"
+                  : "text-[#8a8078] hover:text-white"
+              }`}
+            >
+              <span>Mesas & Códigos QR ({initialTotalMesas})</span>
+            </button>
+          </div>
+
+          {tabPrincipal === "platos" && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCategoryModal(true)}
+                className="px-4 py-2.5 bg-white/[0.04] border border-[#c9a84c]/40 text-[#c9a84c] rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-[#c9a84c] hover:text-[#0a0908] transition-all"
+              >
+                + Nueva Categoría
+              </button>
+            </div>
+          )}
+        </div>
+
+        {tabPrincipal === "mesas" ? (
+          <MesasQRManager initialTotalMesas={initialTotalMesas} />
+        ) : (
+          <div className="space-y-10">
+            {/* Sección: Catálogo de Platos con Filtros */}
+            <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-[#f5f0e8]">
+                    Platos en el Menú ({Math.min(limitePlatos, platosFiltrados.length)} de {platos.length})
+                  </h2>
+                  <p className="text-xs text-[#8a8078] mt-0.5">
+                    Modifica precios, fotos o cambia la disponibilidad con un solo clic.
+                  </p>
+                </div>
+
+                {/* Filtros */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="text"
+                    placeholder="Buscar plato..."
+                    value={filtroBusqueda}
+                    onChange={(e) => {
+                      setFiltroBusqueda(e.target.value);
+                      setLimitePlatos(10);
+                    }}
+                    className="bg-[#0a0908] border border-white/[0.08] rounded-xl px-3.5 py-2 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none w-44"
+                  />
+
+                  <select
+                    value={filtroCategoria}
+                    onChange={(e) => {
+                      setFiltroCategoria(e.target.value === "todas" ? "todas" : Number(e.target.value));
+                      setLimitePlatos(10);
+                    }}
+                    className="bg-[#0a0908] border border-white/[0.08] rounded-xl px-3.5 py-2 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  >
+                    <option value="todas">Todas las categorías</option>
+                    {categorias.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.nombre}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={filtroEstado}
+                    onChange={(e) => {
+                      setFiltroEstado(e.target.value as any);
+                      setLimitePlatos(10);
+                    }}
+                    className="bg-[#0a0908] border border-white/[0.08] rounded-xl px-3.5 py-2 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  >
+                    <option value="todos">Todos</option>
+                    <option value="disponibles">Solo disponibles</option>
+                    <option value="agotados">Agotados</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tabla de Platos */}
+              {platosFiltrados.length === 0 ? (
+                <div className="py-12 text-center text-[#8a8078] text-xs">
+                  No se encontraron platos con los filtros seleccionados.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-white/[0.06] text-[#8a8078] uppercase text-[10px] tracking-wider">
+                          <th className="pb-3 px-2">Foto</th>
+                          <th className="pb-3 px-2">Plato</th>
+                          <th className="pb-3 px-2">Categoría</th>
+                          <th className="pb-3 px-2 text-right">Precio</th>
+                          <th className="pb-3 px-2 text-center">Disponibilidad</th>
+                          <th className="pb-3 px-2 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.04]">
+                        {platosFiltrados.slice(0, limitePlatos).map((plato) => (
+                          <tr key={plato.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3 px-2">
+                              <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-black/40 border border-white/[0.06]">
+                                <Image
+                                  src={plato.imagenUrl || "/images/hero-pizza.jpg"}
+                                  alt={plato.nombre}
+                                  fill
+                                  className="object-cover"
+                                />
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-2">
+                              <span className="font-semibold text-white block">{plato.nombre}</span>
+                              {plato.descripcion && (
+                                <span className="text-[#8a8078] text-[11px] line-clamp-1 max-w-xs">
+                                  {plato.descripcion}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-2 text-[#c9a84c] font-medium">
+                              {plato.categoria?.nombre || "Sin categoría"}
+                            </td>
+
+                            <td className="py-3 px-2 text-right font-serif font-bold text-white">
+                              ${Number(plato.precio).toFixed(2)}
+                            </td>
+
+                            <td className="py-3 px-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleDisponible(plato.id)}
+                                className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                                  plato.disponible
+                                    ? "bg-[#2e7d32]/20 text-[#2e7d32] border-[#2e7d32]/30 hover:bg-[#2e7d32]/30"
+                                    : "bg-[#c62828]/20 text-[#e53935] border-[#c62828]/30 hover:bg-[#c62828]/30"
+                                }`}
+                              >
+                                {plato.disponible ? "Disponible" : "Agotado"}
+                              </button>
+                            </td>
+
+                            <td className="py-3 px-2 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setEditingPlato(plato)}
+                                  className="px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f0e8] rounded-lg border border-white/[0.06] transition-colors text-[11px]"
+                                >
+                                  Editar
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleEliminar(plato.id, plato.nombre)}
+                                  className="px-3 py-1.5 bg-[#c62828]/15 hover:bg-[#c62828]/30 text-[#c62828] rounded-lg border border-[#c62828]/30 transition-colors text-[11px]"
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Botón Ver Más Platos */}
+                  {platosFiltrados.length > limitePlatos && (
+                    <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/[0.06]">
+                      <span className="text-xs text-[#8a8078]">
+                        Mostrando {limitePlatos} de {platosFiltrados.length} platos
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLimitePlatos((prev) => prev + 10)}
+                        className="px-5 py-2 bg-[#c9a84c]/15 hover:bg-[#c9a84c]/25 text-[#c9a84c] border border-[#c9a84c]/30 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
+                      >
+                        Ver más platos (+10) ↓
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal: Editar Plato con Datos Existentes Asegurados */}
@@ -475,7 +368,6 @@ export default function AdminMenuClient({
                   const updatedDisp = formData.get("disponible") === "true";
                   const catObj = categorias.find((c) => c.id === updatedCatId);
 
-                  // Actualización instantánea en el estado local
                   setPlatos((prev) =>
                     prev.map((p) =>
                       p.id === editingPlato.id
@@ -494,7 +386,6 @@ export default function AdminMenuClient({
                     )
                   );
 
-                  // Guardar en la base de datos
                   await actualizarPlatoAction(formData);
                   setEditingPlato(null);
                 } finally {
@@ -676,6 +567,164 @@ export default function AdminMenuClient({
                   className="px-6 py-2.5 rounded-xl bg-[#c9a84c] text-[#0a0908] font-bold uppercase tracking-wider"
                 >
                   Crear Categoría
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Modal: Registrar Nuevo Plato */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141210] border border-white/[0.1] rounded-3xl p-6 sm:p-8 max-w-2xl w-full space-y-6 shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+              <h3 className="font-serif text-lg font-bold text-[#f5f0e8] flex items-center gap-2">
+                <span className="text-[#c9a84c]">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                </span>
+                <span>Registrar Nuevo Plato</span>
+              </h3>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-[#8a8078] hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              action={async (formData) => {
+                setIsSubmitting(true);
+                try {
+                  await crearPlatoAction(formData);
+                  setShowCreateModal(false);
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              className="space-y-5 text-xs"
+            >
+              <div className="grid sm:grid-cols-2 gap-4">
+                {/* Nombre */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                    Nombre del Plato *
+                  </label>
+                  <input
+                    type="text"
+                    name="nombre"
+                    required
+                    placeholder="Ej. Pizza Quattro Formaggi"
+                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  />
+                </div>
+
+                {/* Precio */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                    Precio ($ USD) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="precio"
+                    required
+                    placeholder="8.50"
+                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  />
+                </div>
+
+                {/* Categoría */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                    Categoría
+                  </label>
+                  <select
+                    name="categoriaId"
+                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  >
+                    <option value="">Sin categoría asignada</option>
+                    {categorias.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.nombre} (Orden {cat.orden})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Disponibilidad inicial */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                    Estado Inicial
+                  </label>
+                  <select
+                    name="disponible"
+                    defaultValue="true"
+                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  >
+                    <option value="true">Disponible de Inmediato</option>
+                    <option value="false">Agotado / Desactivado</option>
+                  </select>
+                </div>
+
+                {/* URL de Imagen */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                    URL de Imagen (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    name="imagenUrl"
+                    placeholder="/images/hero-pizza.jpg o https://..."
+                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  />
+                </div>
+
+                {/* URL de Video */}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                    URL de Video / Reel (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    name="videoUrl"
+                    placeholder="https://instagram.com/reel/... o YouTube"
+                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Descripción */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                  Descripción & Ingredientes Principales
+                </label>
+                <textarea
+                  name="descripcion"
+                  rows={2}
+                  placeholder="Masa madre, salsa pomodoro italiana, mozzarella fior di latte..."
+                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                />
+              </div>
+
+              {/* Botones */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={isSubmitting}
+                  className="px-5 py-2.5 rounded-xl border border-white/[0.08] text-[#8a8078] hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#c9a84c] to-[#e0c878] hover:brightness-110 text-[#0a0908] font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-[#c9a84c]/20 disabled:opacity-50"
+                >
+                  {isSubmitting ? "Guardando Plato..." : "+ Guardar Plato en Carta"}
                 </button>
               </div>
             </form>

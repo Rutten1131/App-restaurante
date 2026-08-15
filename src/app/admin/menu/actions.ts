@@ -119,3 +119,18 @@ export async function crearCategoriaAction(formData: FormData) {
   revalidatePath("/menu");
   revalidatePath("/");
 }
+
+export async function guardarConfiguracionMesasAction(formData: FormData) {
+  const { setConfiguracion } = await import("@/db/queries/fidelizacion");
+  const totalMesasRaw = formData.get("totalMesas") as string;
+  const totalMesas = parseInt(totalMesasRaw, 10);
+  
+  const valorFinal = isNaN(totalMesas) || totalMesas < 1 ? 12 : Math.min(totalMesas, 50);
+  await setConfiguracion("total_mesas", String(valorFinal));
+
+  revalidatePath("/admin/menu");
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/app/menu");
+  return { success: true, totalMesas: valorFinal };
+}
+

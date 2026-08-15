@@ -90,7 +90,8 @@ export async function crearPedidoOnlineAction(input: CrearPedidoOnlineInput) {
     let textoMesa = "Local";
 
     if (input.modalidad === "mesa") {
-      textoMesa = input.mesa ? `Mesa ${input.mesa}` : "Mesa Local";
+      const cleanMesa = input.mesa?.replace(/^mesa\s*/i, "").trim();
+      textoMesa = cleanMesa ? `Mesa ${cleanMesa}` : "Mesa Local";
     } else if (input.modalidad === "llevar") {
       textoMesa = "Para Llevar";
     } else {

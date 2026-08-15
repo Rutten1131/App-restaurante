@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { generarClaveAccesoSRI } from "@/lib/sri/claveAcceso";
 import { generarXMLFacturaSRI } from "@/lib/sri/xmlFactura";
 import { emitirFacturaAction } from "./actions";
+import { formatMesa } from "@/lib/formatMesa";
 
 interface ItemFactura {
   id: number;
@@ -252,7 +253,7 @@ export default function FacturasClient({
                       Comanda #{p.id}
                     </span>
                     <span className="text-[11px] font-bold text-white bg-white/[0.08] px-2.5 py-0.5 rounded-lg">
-                      {p.mesa ? `Mesa ${p.mesa}` : "Para Llevar"}
+                      {formatMesa(p.mesa)}
                     </span>
                   </div>
 
@@ -331,7 +332,7 @@ export default function FacturasClient({
                       001-001-{String(f.id).padStart(9, "0")}
                     </td>
                     <td className="py-3 px-2 text-[#8a8078]">
-                      #{f.pedidoId} {f.pedidoMesa ? `(Mesa ${f.pedidoMesa})` : ""}
+                      #{f.pedidoId} {f.pedidoMesa ? `(${formatMesa(f.pedidoMesa)})` : ""}
                     </td>
                     <td className="py-3 px-2 font-semibold text-[#f5f0e8]">
                       {f.clienteNombre || "Consumidor Final"}
@@ -407,7 +408,7 @@ export default function FacturasClient({
                 <h3 className="font-serif text-xl font-bold text-[#f5f0e8]">
                   Emitir Comprobante de Venta
                 </h3>
-                <p className="text-xs text-[#8a8078]">Comanda #{pedidoSeleccionado.id} {pedidoSeleccionado.mesa ? `· Mesa ${pedidoSeleccionado.mesa}` : ""}</p>
+                <p className="text-xs text-[#8a8078]">Comanda #{pedidoSeleccionado.id} · {formatMesa(pedidoSeleccionado.mesa)}</p>
               </div>
               <button
                 onClick={() => setModalOpen(false)}

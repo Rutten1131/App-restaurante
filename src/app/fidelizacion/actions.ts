@@ -72,6 +72,7 @@ export async function guardarEncuestaAction(
 
 /**
  * Paso 3 (fidelización) / Paso 2 (reseña) – Guardar calificación del servicio.
+ * Si la calificación es de 1, 2 o 3 estrellas, envía alerta inmediata a WhatsApp (+593 96 341 0409).
  */
 export async function guardarResenaAction(
   formData: FormData
@@ -86,6 +87,48 @@ export async function guardarResenaAction(
 
   try {
     await insertarResena({ clienteId, calificacion, comentario });
+
+    // Notificación automática a WhatsApp si la calificación es de 1, 2 o 3 estrellas
+    if (calificacion <= 3) {
+      try {
+        let clienteNombre: string | null = null;
+        let clienteTelefono: string | null = null;
+        let platFavorito: string | null = null;
+
+        if (clienteId) {
+          const { db } = await import("@/db");
+          const { clientes, encuestas } = await import("@/db/schema");
+          const { eq, desc } = await import("drizzle-orm");
+
+          const [cl] = await db.select().from(clientes).where(eq(clientes.id, clienteId)).limit(1);
+          if (cl) {
+            clienteNombre = cl.nombre;
+            clienteTelefono = cl.telefono;
+          }
+
+          const [enc] = await db
+            .select()
+            .from(encuestas)
+            .where(eq(encuestas.clienteId, clienteId))
+            .orderBy(desc(encuestas.creadaEn))
+            .limit(1);
+          if (enc) {
+            platFavorito = enc.platFavorito;
+          }
+        }
+
+        const { enviarAlertaResenaCritica } = await import("@/lib/evolution/whatsapp");
+        await enviarAlertaResenaCritica({
+          clienteNombre,
+          clienteTelefono,
+          calificacion,
+          comentario,
+          platFavorito,
+        });
+      } catch (errWhatsApp) {
+        console.error("Aviso: No se pudo enviar WhatsApp de alerta:", errWhatsApp);
+      }
+    }
 
     revalidatePath("/admin/clientes");
     revalidatePath("/admin");
