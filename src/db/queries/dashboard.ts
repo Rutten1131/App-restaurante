@@ -10,7 +10,7 @@ import {
   insumos,
   facturas,
 } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 
 export interface DashboardMetrics {
   // Resumen Menú
@@ -65,35 +65,52 @@ export interface DashboardMetrics {
   }>;
 }
 
-export async function getDashboardData(): Promise<DashboardMetrics> {
+export async function getDashboardData(restauranteId = 1): Promise<DashboardMetrics> {
   try {
     // 1. Métricas de Platos & Categorías
     const [totalPlatosRes] = await db
       .select({ count: sql<number>`count(*)` })
-      .from(platos);
+      .from(platos)
+      .where(eq(platos.restauranteId, restauranteId));
+
     const [platosDispRes] = await db
       .select({ count: sql<number>`count(*)` })
       .from(platos)
-      .where(eq(platos.disponible, true));
+      .where(
+        and(
+          eq(platos.restauranteId, restauranteId),
+          eq(platos.disponible, true)
+        )
+      );
+
     const [totalCatsRes] = await db
       .select({ count: sql<number>`count(*)` })
-      .from(categorias);
+      .from(categorias)
+      .where(eq(categorias.restauranteId, restauranteId));
 
     // 2. Métricas de Clientes y Fidelización
     const [totalClientesRes] = await db
       .select({ count: sql<number>`count(*)` })
-      .from(clientes);
+      .from(clientes)
+      .where(eq(clientes.restauranteId, restauranteId));
+
     const [alertasPendRes] = await db
       .select({ count: sql<number>`count(*)` })
       .from(alertasFidelizacion)
-      .where(eq(alertasFidelizacion.estado, "pendiente"));
+      .where(
+        and(
+          eq(alertasFidelizacion.restauranteId, restauranteId),
+          eq(alertasFidelizacion.estado, "pendiente")
+        )
+      );
 
     const [resenasStats] = await db
       .select({
         avg: sql<number>`COALESCE(AVG(${resenas.calificacion}), 0)`,
         count: sql<number>`count(*)`,
       })
-      .from(resenas);
+      .from(resenas)
+      .where(eq(resenas.restauranteId, restauranteId));
 
     // 3. Métricas de Pedidos y Ventas
     const [pedidosStats] = await db
@@ -105,21 +122,29 @@ export async function getDashboardData(): Promise<DashboardMetrics> {
         listos: sql<number>`SUM(CASE WHEN ${pedidos.estado} = 'listo' THEN 1 ELSE 0 END)`,
         entregados: sql<number>`SUM(CASE WHEN ${pedidos.estado} = 'entregado' THEN 1 ELSE 0 END)`,
       })
-      .from(pedidos);
+      .from(pedidos)
+      .where(eq(pedidos.restauranteId, restauranteId));
 
     // 4. Métricas de Inventario & Facturación
     const [totalInsumosRes] = await db
       .select({ count: sql<number>`count(*)` })
-      .from(insumos);
+      .from(insumos)
+      .where(eq(insumos.restauranteId, restauranteId));
+
     const [insumosBajosRes] = await db
       .select({ count: sql<number>`count(*)` })
       .from(insumos)
       .where(
-        sql`CAST(${insumos.stockActual} AS DECIMAL(10,2)) <= CAST(${insumos.stockMinimo} AS DECIMAL(10,2))`
+        and(
+          eq(insumos.restauranteId, restauranteId),
+          sql`CAST(${insumos.stockActual} AS DECIMAL(10,2)) <= CAST(${insumos.stockMinimo} AS DECIMAL(10,2))`
+        )
       );
+
     const [totalFacturasRes] = await db
       .select({ count: sql<number>`count(*)` })
-      .from(facturas);
+      .from(facturas)
+      .where(eq(facturas.restauranteId, restauranteId));
 
     // 5. Últimos Pedidos
     const ultimosPedidosQuery = await db
@@ -134,6 +159,7 @@ export async function getDashboardData(): Promise<DashboardMetrics> {
       })
       .from(pedidos)
       .leftJoin(clientes, eq(pedidos.clienteId, clientes.id))
+      .where(eq(pedidos.restauranteId, restauranteId))
       .orderBy(desc(pedidos.creadoEn))
       .limit(6);
 
@@ -150,7 +176,12 @@ export async function getDashboardData(): Promise<DashboardMetrics> {
       })
       .from(alertasFidelizacion)
       .innerJoin(clientes, eq(alertasFidelizacion.clienteId, clientes.id))
-      .where(eq(alertasFidelizacion.estado, "pendiente"))
+      .where(
+        and(
+          eq(alertasFidelizacion.restauranteId, restauranteId),
+          eq(alertasFidelizacion.estado, "pendiente")
+        )
+      )
       .orderBy(desc(alertasFidelizacion.diasSinVolver))
       .limit(4);
 
@@ -165,7 +196,10 @@ export async function getDashboardData(): Promise<DashboardMetrics> {
       })
       .from(insumos)
       .where(
-        sql`CAST(${insumos.stockActual} AS DECIMAL(10,2)) <= CAST(${insumos.stockMinimo} AS DECIMAL(10,2))`
+        and(
+          eq(insumos.restauranteId, restauranteId),
+          sql`CAST(${insumos.stockActual} AS DECIMAL(10,2)) <= CAST(${insumos.stockMinimo} AS DECIMAL(10,2))`
+        )
       )
       .limit(5);
 

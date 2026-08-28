@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db";
 import { clientes, encuestas, resenas } from "@/db/schema";
-import { desc, eq, or, sql } from "drizzle-orm";
+import { desc, eq, or, and, sql } from "drizzle-orm";
 import { normalizarTelefono } from "@/lib/normalizarTelefono";
 
 let tablasIniciadas = false;
@@ -12,6 +12,7 @@ async function asegurarTablas() {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS \`encuestas\` (
         \`id\` int(11) NOT NULL AUTO_INCREMENT,
+        \`restaurante_id\` int(11) DEFAULT 1,
         \`cliente_id\` int(11) DEFAULT NULL,
         \`plat_favorito\` varchar(150) DEFAULT NULL,
         \`frecuencia_visita\` varchar(80) DEFAULT NULL,
@@ -78,9 +79,9 @@ export async function setConfiguracion(clave: string, valor: string) {
 }
 
 /**
- * Busca cliente por teléfono normalizado (soporta 593..., 09..., 9...).
+ * Busca cliente por teléfono normalizado dentro de un restaurante.
  */
-export async function buscarClientePorTelefono(telefonoRaw: string) {
+export async function buscarClientePorTelefono(telefonoRaw: string, restauranteId = 1) {
   const telefonoNorm = normalizarTelefono(telefonoRaw);
   if (!telefonoNorm) return null;
 
@@ -92,10 +93,13 @@ export async function buscarClientePorTelefono(telefonoRaw: string) {
     .select()
     .from(clientes)
     .where(
-      or(
-        eq(clientes.telefono, telefonoNorm),
-        eq(clientes.telefono, sinCero),
-        eq(clientes.telefono, con593),
+      and(
+        eq(clientes.restauranteId, restauranteId),
+        or(
+          eq(clientes.telefono, telefonoNorm),
+          eq(clientes.telefono, sinCero),
+          eq(clientes.telefono, con593)
+        )
       )
     )
     .limit(1);
@@ -112,21 +116,23 @@ export async function buscarClientePorTelefono(telefonoRaw: string) {
 }
 
 /**
- * Crea un nuevo cliente fidelización o actualiza el existente por teléfono.
+ * Crea un nuevo cliente fidelización o actualiza el existente por teléfono para un restaurante dado.
  * Devuelve el clienteId.
  */
 export async function upsertClienteFidelizacion(data: {
+  restauranteId?: number;
   nombre: string;
   telefono: string;
   email?: string | null;
   cumpleanios?: string | null;
 }): Promise<number> {
+  const restauranteId = data.restauranteId ?? 1;
   const telefonoNorm = normalizarTelefono(data.telefono);
   if (!telefonoNorm) {
     throw new Error("Teléfono inválido");
   }
 
-  const existing = await buscarClientePorTelefono(telefonoNorm);
+  const existing = await buscarClientePorTelefono(telefonoNorm, restauranteId);
 
   if (existing) {
     await db
@@ -140,6 +146,7 @@ export async function upsertClienteFidelizacion(data: {
   const numeroCliente = `fid-${randomNum}`;
 
   const result = await db.insert(clientes).values({
+    restauranteId,
     numeroCliente,
     nombre: data.nombre,
     telefono: telefonoNorm,
@@ -155,6 +162,7 @@ export async function upsertClienteFidelizacion(data: {
  * Guarda la encuesta de datos del QR de fidelización asegurando que la tabla exista.
  */
 export async function insertarEncuesta(data: {
+  restauranteId?: number;
   clienteId: number;
   platFavorito?: string | null;
   frecuenciaVisita?: string | null;
@@ -166,6 +174,7 @@ export async function insertarEncuesta(data: {
   await asegurarTablas();
   try {
     return await db.insert(encuestas).values({
+      restauranteId: data.restauranteId ?? 1,
       clienteId: data.clienteId,
       platFavorito: data.platFavorito || null,
       frecuenciaVisita: data.frecuenciaVisita || null,
@@ -186,11 +195,13 @@ export async function insertarEncuesta(data: {
  * esPublica = true si calificacion === 5
  */
 export async function insertarResena(data: {
+  restauranteId?: number;
   clienteId?: number | null;
   calificacion: number;
   comentario?: string | null;
 }) {
   return await db.insert(resenas).values({
+    restauranteId: data.restauranteId ?? 1,
     clienteId: data.clienteId || null,
     calificacion: data.calificacion,
     comentario: data.comentario || null,
@@ -199,12 +210,13 @@ export async function insertarResena(data: {
 }
 
 /**
- * Obtiene todas las reseñas recientes con datos del cliente.
+ * Obtiene todas las reseñas recientes con datos del cliente para un restaurante.
  */
-export async function getResenasRecientes(limit = 100) {
+export async function getResenasRecientes(limit = 100, restauranteId = 1) {
   const rows = await db
     .select({
       id: resenas.id,
+      restauranteId: resenas.restauranteId,
       calificacion: resenas.calificacion,
       comentario: resenas.comentario,
       esPublica: resenas.esPublica,
@@ -214,6 +226,7 @@ export async function getResenasRecientes(limit = 100) {
     })
     .from(resenas)
     .leftJoin(clientes, eq(resenas.clienteId, clientes.id))
+    .where(eq(resenas.restauranteId, restauranteId))
     .orderBy(desc(resenas.creadaEn))
     .limit(limit);
 

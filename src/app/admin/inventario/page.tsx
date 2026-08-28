@@ -2,13 +2,18 @@ import Link from "next/link";
 import { getInsumosInventario, getRecetasPlatos, getMovimientosInventario } from "@/db/queries/inventario";
 import InventarioClient from "./InventarioClient";
 
+import { getAdminSession } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminInventarioPage() {
+  const session = await getAdminSession();
+  const restId = session?.restauranteId ?? 1;
+
   const [insumos, recetas, movimientos] = await Promise.all([
-    getInsumosInventario(),
-    getRecetasPlatos(),
-    getMovimientosInventario(30),
+    getInsumosInventario(restId),
+    getRecetasPlatos(restId),
+    getMovimientosInventario(30, restId),
   ]);
 
   return (

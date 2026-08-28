@@ -3,9 +3,13 @@ import { db } from "@/db";
 import { insumos, movimientosInventario, recetaInsumos, itemsPedido, platos, categorias } from "@/db/schema";
 import { desc, eq, and, sql } from "drizzle-orm";
 
-export async function getInsumosInventario() {
+export async function getInsumosInventario(restauranteId = 1) {
   try {
-    const listaInsumos = await db.select().from(insumos).orderBy(insumos.nombre);
+    const listaInsumos = await db
+      .select()
+      .from(insumos)
+      .where(eq(insumos.restauranteId, restauranteId))
+      .orderBy(insumos.nombre);
     return listaInsumos;
   } catch (error) {
     console.error("Error al obtener insumos:", error);
@@ -13,7 +17,7 @@ export async function getInsumosInventario() {
   }
 }
 
-export async function getRecetasPlatos() {
+export async function getRecetasPlatos(restauranteId = 1) {
   try {
     const rows = await db
       .select({
@@ -27,10 +31,11 @@ export async function getRecetasPlatos() {
         unidad: insumos.unidad,
         cantidadUsada: recetaInsumos.cantidadUsada,
       })
-      .from(recetaInsumos)
-      .innerJoin(platos, eq(recetaInsumos.platoId, platos.id))
-      .innerJoin(insumos, eq(recetaInsumos.insumoId, insumos.id))
+      .from(platos)
+      .leftJoin(recetaInsumos, eq(recetaInsumos.platoId, platos.id))
+      .leftJoin(insumos, eq(recetaInsumos.insumoId, insumos.id))
       .leftJoin(categorias, eq(platos.categoriaId, categorias.id))
+      .where(eq(platos.restauranteId, restauranteId))
       .orderBy(platos.nombre);
 
     // Agrupar por plato
@@ -58,13 +63,15 @@ export async function getRecetasPlatos() {
           insumos: [],
         });
       }
-      recetasMap.get(row.platoId)!.insumos.push({
-        recetaId: row.recetaId,
-        insumoId: row.insumoId,
-        insumoNombre: row.insumoNombre,
-        unidad: row.unidad,
-        cantidadUsada: row.cantidadUsada,
-      });
+      if (row.recetaId && row.insumoId && row.insumoNombre) {
+        recetasMap.get(row.platoId)!.insumos.push({
+          recetaId: row.recetaId,
+          insumoId: row.insumoId,
+          insumoNombre: row.insumoNombre,
+          unidad: row.unidad || "unidades",
+          cantidadUsada: row.cantidadUsada || "0",
+        });
+      }
     }
 
     return Array.from(recetasMap.values());
@@ -74,7 +81,7 @@ export async function getRecetasPlatos() {
   }
 }
 
-export async function getMovimientosInventario(limit = 25) {
+export async function getMovimientosInventario(limit = 25, restauranteId = 1) {
   try {
     const movimientos = await db
       .select({
@@ -88,6 +95,7 @@ export async function getMovimientosInventario(limit = 25) {
       })
       .from(movimientosInventario)
       .innerJoin(insumos, eq(movimientosInventario.insumoId, insumos.id))
+      .where(eq(insumos.restauranteId, restauranteId))
       .orderBy(desc(movimientosInventario.creadoEn))
       .limit(limit);
 
@@ -99,12 +107,14 @@ export async function getMovimientosInventario(limit = 25) {
 }
 
 export async function crearInsumo(data: {
+  restauranteId?: number;
   nombre: string;
   unidad: string;
   stockActual: string;
   stockMinimo: string;
 }) {
   return await db.insert(insumos).values({
+    restauranteId: data.restauranteId ?? 1,
     nombre: data.nombre,
     unidad: data.unidad,
     stockActual: data.stockActual,
@@ -134,6 +144,32 @@ export async function agregarInsumoReceta(data: {
 export async function eliminarInsumoReceta(recetaId: number) {
   return await db.delete(recetaInsumos).where(eq(recetaInsumos.id, recetaId));
 }
+
+/**
+ * Sincroniza la receta completa de un plato (reemplaza o crea los insumos asignados).
+ */
+export async function sincronizarRecetaPlato(
+  platoId: number,
+  items: { insumoId: number; cantidadUsada: string | number }[]
+) {
+  // 1. Eliminar receta previa de este plato
+  await db.delete(recetaInsumos).where(eq(recetaInsumos.platoId, platoId));
+
+  // 2. Insertar los nuevos insumos
+  if (items && Array.isArray(items) && items.length > 0) {
+    for (const item of items) {
+      const cant = Number(item.cantidadUsada);
+      if (item.insumoId && cant > 0) {
+        await db.insert(recetaInsumos).values({
+          platoId,
+          insumoId: item.insumoId,
+          cantidadUsada: String(cant),
+        });
+      }
+    }
+  }
+}
+
 
 /**
  * Descuenta automáticamente los insumos utilizados en una comanda

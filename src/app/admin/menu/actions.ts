@@ -8,8 +8,17 @@ import {
   toggleDisponible,
   crearCategoria,
 } from "@/db/queries/menu";
+import {
+  sincronizarRecetaPlato,
+  crearInsumo,
+} from "@/db/queries/inventario";
+
+import { getAdminSession } from "@/lib/auth";
 
 export async function crearPlatoAction(formData: FormData) {
+  const session = await getAdminSession();
+  const restauranteId = session?.restauranteId ?? 1;
+
   const nombre = formData.get("nombre") as string;
   const descripcion = (formData.get("descripcion") as string) || undefined;
   const precio = formData.get("precio") as string;
@@ -17,6 +26,7 @@ export async function crearPlatoAction(formData: FormData) {
   const imagenUrl = (formData.get("imagenUrl") as string) || undefined;
   const videoUrl = (formData.get("videoUrl") as string) || undefined;
   const disponible = formData.get("disponible") === "true";
+  const recetaJson = formData.get("recetaJson") as string;
 
   if (!nombre || !precio) {
     throw new Error("Nombre y precio son obligatorios");
@@ -24,7 +34,8 @@ export async function crearPlatoAction(formData: FormData) {
 
   const categoriaId = categoriaIdRaw ? parseInt(categoriaIdRaw, 10) : undefined;
 
-  await crearPlato({
+  const platoId = await crearPlato({
+    restauranteId,
     nombre,
     descripcion,
     precio,
@@ -34,11 +45,30 @@ export async function crearPlatoAction(formData: FormData) {
     disponible,
   });
 
+  // Guardar receta si se enviaron insumos
+  if (platoId && recetaJson) {
+    try {
+      const items = JSON.parse(recetaJson);
+      if (Array.isArray(items)) {
+        await sincronizarRecetaPlato(platoId, items);
+      }
+    } catch (e) {
+      console.error("Error al parsear recetaJson en crearPlatoAction:", e);
+    }
+  }
+
   revalidatePath("/admin/menu");
+  revalidatePath("/admin/inventario");
   revalidatePath("/app/menu");
   revalidatePath("/app/mesa");
   revalidatePath("/menu");
   revalidatePath("/");
+  if (session?.restauranteSlug) {
+    revalidatePath(`/r/${session.restauranteSlug}`);
+    revalidatePath(`/r/${session.restauranteSlug}/menu`);
+  }
+
+  return { success: true, platoId };
 }
 
 export async function actualizarPlatoAction(formData: FormData) {
@@ -53,6 +83,7 @@ export async function actualizarPlatoAction(formData: FormData) {
   const imagenUrl = (formData.get("imagenUrl") as string) || undefined;
   const videoUrl = (formData.get("videoUrl") as string) || undefined;
   const disponibleRaw = formData.get("disponible") as string;
+  const recetaJson = formData.get("recetaJson") as string;
 
   const categoriaId = categoriaIdRaw ? parseInt(categoriaIdRaw, 10) : undefined;
   const disponible = disponibleRaw !== null && disponibleRaw !== undefined ? disponibleRaw === "true" : undefined;
@@ -67,11 +98,90 @@ export async function actualizarPlatoAction(formData: FormData) {
     disponible,
   });
 
+  // Sincronizar receta
+  if (recetaJson !== undefined && recetaJson !== null) {
+    try {
+      const items = JSON.parse(recetaJson);
+      if (Array.isArray(items)) {
+        await sincronizarRecetaPlato(id, items);
+      }
+    } catch (e) {
+      console.error("Error al parsear recetaJson en actualizarPlatoAction:", e);
+    }
+  }
+
   revalidatePath("/admin/menu");
+  revalidatePath("/admin/inventario");
   revalidatePath("/app/menu");
   revalidatePath("/app/mesa");
   revalidatePath("/menu");
   revalidatePath("/");
+  return { success: true };
+}
+
+export async function guardarRecetaPlatoAction(formData: FormData) {
+  const platoIdRaw = formData.get("platoId") as string;
+  const platoId = parseInt(platoIdRaw, 10);
+  if (isNaN(platoId)) throw new Error("ID de plato inválido");
+
+  const recetaJson = formData.get("recetaJson") as string;
+  if (!recetaJson) throw new Error("Datos de receta vacíos");
+
+  try {
+    const items = JSON.parse(recetaJson);
+    if (Array.isArray(items)) {
+      await sincronizarRecetaPlato(platoId, items);
+    }
+    revalidatePath("/admin/menu");
+    revalidatePath("/admin/inventario");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error guardarRecetaPlatoAction:", error);
+    return { error: error.message || "Error al guardar receta" };
+  }
+}
+
+export async function crearInsumoRapidoAction(formData: FormData) {
+  const session = await getAdminSession();
+  const restauranteId = session?.restauranteId ?? 1;
+
+  const nombre = (formData.get("nombre") as string)?.trim();
+  const unidad = (formData.get("unidad") as string)?.trim() || "unidades";
+  const stockActual = (formData.get("stockActual") as string)?.trim() || "0.00";
+  const stockMinimo = (formData.get("stockMinimo") as string)?.trim() || "0.00";
+
+  if (!nombre) {
+    return { error: "El nombre del insumo es obligatorio" };
+  }
+
+  try {
+    const result = await crearInsumo({
+      restauranteId,
+      nombre,
+      unidad,
+      stockActual,
+      stockMinimo,
+    });
+
+    const newId = Number((result as any)[0]?.insertId ?? 0);
+
+    revalidatePath("/admin/menu");
+    revalidatePath("/admin/inventario");
+
+    return {
+      success: true,
+      insumo: {
+        id: newId,
+        nombre,
+        unidad,
+        stockActual,
+        stockMinimo,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error crearInsumoRapidoAction:", error);
+    return { error: error.message || "Error al crear insumo" };
+  }
 }
 
 export async function eliminarPlatoAction(formData: FormData) {
@@ -103,6 +213,9 @@ export async function toggleDisponibleAction(formData: FormData) {
 }
 
 export async function crearCategoriaAction(formData: FormData) {
+  const session = await getAdminSession();
+  const restauranteId = session?.restauranteId ?? 1;
+
   const nombre = formData.get("nombre") as string;
   const ordenRaw = formData.get("orden") as string;
 
@@ -111,13 +224,17 @@ export async function crearCategoriaAction(formData: FormData) {
   }
 
   const orden = ordenRaw ? parseInt(ordenRaw, 10) : 0;
-  await crearCategoria(nombre, isNaN(orden) ? 0 : orden);
+  await crearCategoria(nombre, isNaN(orden) ? 0 : orden, restauranteId);
 
   revalidatePath("/admin/menu");
   revalidatePath("/app/menu");
   revalidatePath("/app/mesa");
   revalidatePath("/menu");
   revalidatePath("/");
+  if (session?.restauranteSlug) {
+    revalidatePath(`/r/${session.restauranteSlug}`);
+    revalidatePath(`/r/${session.restauranteSlug}/menu`);
+  }
 }
 
 export async function guardarConfiguracionMesasAction(formData: FormData) {

@@ -3,12 +3,17 @@ import { getFacturasCompletas } from "@/db/queries/facturas";
 import { getPedidosCompletos } from "@/db/queries/pedidos";
 import FacturasClient from "./FacturasClient";
 
+import { getAdminSession } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminFacturasPage() {
+  const session = await getAdminSession();
+  const restId = session?.restauranteId ?? 1;
+
   const [facturas, todosLosPedidos] = await Promise.all([
-    getFacturasCompletas(),
-    getPedidosCompletos(),
+    getFacturasCompletas(restId),
+    getPedidosCompletos(restId),
   ]);
 
   // Comandas disponibles para facturar (las entregadas o las recibidas que no tengan factura aún)

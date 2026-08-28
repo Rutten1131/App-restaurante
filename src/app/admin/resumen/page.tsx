@@ -35,8 +35,11 @@ function IcChevronRight({ className }: { className?: string }) {
   return <svg {...s} className={className}><polyline points="9 18 15 12 9 6"/></svg>;
 }
 
+import { getAdminSession } from "@/lib/auth";
+
 export default async function AdminResumenPage() {
-  const data = await getDashboardData();
+  const session = await getAdminSession();
+  const data = await getDashboardData(session?.restauranteId ?? 1);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-8">

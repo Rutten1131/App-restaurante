@@ -11,7 +11,15 @@ function IcExternalLink({ className }: { className?: string }) {
   return <svg {...s} className={className}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
 }
 
-export default function QRCodeCard() {
+interface QRCodeCardProps {
+  restauranteSlug?: string;
+  restauranteNombre?: string;
+}
+
+export default function QRCodeCard({
+  restauranteSlug = "roma",
+  restauranteNombre = "Roma Pizzería",
+}: QRCodeCardProps) {
   const [origin, setOrigin] = useState("https://app-restaurante-rose.vercel.app");
 
   useEffect(() => {
@@ -20,7 +28,7 @@ export default function QRCodeCard() {
     }
   }, []);
 
-  const targetUrl = `${origin}/fidelizacion`;
+  const targetUrl = `${origin}/r/${restauranteSlug}/fidelizacion`;
   const qrPreviewUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
   const qrDownloadUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(targetUrl)}`;
 
@@ -30,7 +38,7 @@ export default function QRCodeCard() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={qrPreviewUrl}
-          alt="QR Oficial Fidelización y Reseñas Roma"
+          alt={`QR Oficial Fidelización y Reseñas ${restauranteNombre}`}
           className="w-full h-full object-contain"
         />
       </div>
@@ -53,7 +61,7 @@ export default function QRCodeCard() {
             href={qrDownloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            download="QR_Roma_Fidelizacion_Mesas.png"
+            download={`QR_${restauranteSlug}_Fidelizacion_Mesas.png`}
             className="flex-1 py-2 bg-white/10 text-white font-semibold text-xs rounded-xl hover:bg-white/20 transition-all text-center flex items-center justify-center gap-1"
           >
             <IcDownload className="w-3 h-3" />

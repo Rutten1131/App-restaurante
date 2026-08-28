@@ -15,6 +15,7 @@ export interface ItemPedidoInput {
 }
 
 export interface CrearPedidoOnlineInput {
+  restauranteId?: number;
   modalidad: "mesa" | "llevar" | "delivery";
   mesa?: string;
   nombreCliente?: string;
@@ -64,12 +65,15 @@ export async function crearPedidoOnlineAction(input: CrearPedidoOnlineInput) {
       }
     }
 
+    const restId = input.restauranteId || 1;
+
     if (!clienteId && (input.nombreCliente || telefonoNormalizado)) {
       // Crear nuevo cliente para el club de fidelización
       const randomNum = Math.floor(100 + Math.random() * 900);
       const numeroCliente = `cli-${randomNum}`;
 
       const [resCliente] = await db.insert(clientes).values({
+        restauranteId: restId,
         numeroCliente,
         nombre: nombre,
         telefono: telefonoNormalizado,
@@ -100,6 +104,7 @@ export async function crearPedidoOnlineAction(input: CrearPedidoOnlineInput) {
 
     // 4. Insertar Pedido
     const [resPedido] = await db.insert(pedidos).values({
+      restauranteId: restId,
       clienteId: clienteId,
       origen: origen,
       mesa: textoMesa,

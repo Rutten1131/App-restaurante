@@ -12,6 +12,8 @@ export default function SiteLayoutWrapper({
   const pathname = usePathname();
   const isStandalone =
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/superadmin") ||
+    pathname.startsWith("/r/") ||
     pathname.startsWith("/app") ||
     pathname.startsWith("/fidelizacion") ||
     pathname.startsWith("/resena");

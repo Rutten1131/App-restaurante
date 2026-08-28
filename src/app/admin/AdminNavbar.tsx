@@ -49,6 +49,8 @@ interface AdminNavbarProps {
   session: {
     nombre: string;
     rol: string;
+    restauranteNombre?: string | null;
+    restauranteSlug?: string | null;
   };
   metrics: AdminNavMetrics;
 }
@@ -151,17 +153,12 @@ export default function AdminNavbar({ session, metrics }: AdminNavbarProps) {
           {/* Lado Izquierdo: Logo & Selector Desplegable */}
           <div className="flex items-center gap-3 sm:gap-6" ref={dropdownRef}>
             <Link href="/admin/pedidos" className="flex items-center gap-2.5 group shrink-0">
-              <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-[#c9a84c]/40 group-hover:border-[#c9a84c] transition-colors">
-                <Image
-                  src="/images/logo-roma.jpg"
-                  alt="Roma Logo"
-                  fill
-                  className="object-cover"
-                />
+              <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-[#c9a84c]/40 group-hover:border-[#c9a84c] transition-colors bg-gradient-to-br from-[#c9a84c]/20 to-transparent flex items-center justify-center font-bold text-xs text-[#c9a84c]">
+                {session.restauranteNombre?.substring(0, 2).toUpperCase() || "RO"}
               </div>
               <div className="hidden sm:block">
-                <span className="font-serif text-sm font-bold tracking-tight text-[#f5f0e8] group-hover:text-[#c9a84c] transition-colors block leading-tight">
-                  ROMA PIZZERÍA
+                <span className="font-serif text-sm font-bold tracking-tight text-[#f5f0e8] group-hover:text-[#c9a84c] transition-colors block leading-tight truncate max-w-[150px]">
+                  {session.restauranteNombre || "ROMA PIZZERÍA"}
                 </span>
                 <span className="text-[9px] uppercase tracking-widest text-[#c9a84c] font-semibold block">
                   Panel Administrativo

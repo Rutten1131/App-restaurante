@@ -12,6 +12,7 @@ interface Plato {
   descripcion?: string | null;
   precio: string | number;
   imagenUrl?: string | null;
+  videoUrl?: string | null;
   disponible?: boolean;
 }
 
@@ -25,6 +26,12 @@ interface Categoria {
 interface AppMenuClientProps {
   categorias: Categoria[];
   initialMesa?: string;
+  restauranteId?: number;
+  restauranteNombre?: string;
+  restauranteSlug?: string;
+  logoUrl?: string | null;
+  colorPrimario?: string;
+  backUrl?: string;
 }
 
 // Helper para asignar imagen default de alta calidad a cada categoría
@@ -44,9 +51,36 @@ function getCategoryImage(nombre: string): string {
 
 const BEBIDAS_NOMBRES = ["vinos", "bebidas frías", "bebidas frias", "gaseosas", "cervezas", "bebidas calientes", "bebidas"];
 
+function getReelInfo(url?: string | null): { label: string; href: string; icon: string } | null {
+  if (!url || !url.trim()) return null;
+  const raw = url.trim();
+  let href = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+  const lower = href.toLowerCase();
+
+  if (lower.includes("instagram.com")) {
+    return { label: "Reel en Instagram", href, icon: "📸" };
+  }
+  if (lower.includes("tiktok.com")) {
+    return { label: "Ver en TikTok", href, icon: "🎵" };
+  }
+  if (lower.includes("facebook.com") || lower.includes("fb.watch")) {
+    return { label: "Reel en Facebook", href, icon: "📹" };
+  }
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
+    return { label: "Ver en YouTube", href, icon: "▶️" };
+  }
+  return { label: "Ver Video", href, icon: "🎬" };
+}
+
 export default function AppMenuClient({
   categorias,
   initialMesa,
+  restauranteId = 1,
+  restauranteNombre = "Roma Pizzería",
+  restauranteSlug = "roma",
+  logoUrl,
+  colorPrimario = "#c9a84c",
+  backUrl,
 }: AppMenuClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -242,6 +276,7 @@ export default function AppMenuClient({
     ].filter(Boolean);
 
     const payload = {
+      restauranteId,
       modalidad,
       mesa: modalidad === "mesa" ? mesaNum : undefined,
       nombreCliente: clienteNombre,
@@ -297,18 +332,18 @@ export default function AppMenuClient({
       {/* Header Sticky */}
       <header className="sticky top-0 z-40 bg-[#141210]/95 backdrop-blur-md border-b border-white/[0.06] py-3 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href={backUrl || (restauranteSlug ? `/r/${restauranteSlug}` : "/")} className="flex items-center gap-3">
             <div className="relative w-8 h-8 rounded-full overflow-hidden ring-2 ring-[#c9a84c]/30">
               <Image
-                src="/images/logo-roma.jpg"
-                alt="Roma"
+                src={logoUrl || "/images/logo-roma.jpg"}
+                alt={restauranteNombre}
                 fill
                 className="object-cover"
               />
             </div>
             <div>
-              <span className="font-serif text-lg font-bold text-[#f5f0e8] block leading-none">
-                ROMA
+              <span className="font-serif text-lg font-bold text-[#f5f0e8] block leading-none truncate max-w-[180px]">
+                {restauranteNombre}
               </span>
               <span className="text-[9px] uppercase tracking-widest text-[#2e7d32] font-bold">
                 {vista === "resumen" ? "Resumen de Pedido" : "Carta Digital & QR"}
@@ -574,6 +609,22 @@ export default function AppMenuClient({
                             {plato.descripcion}
                           </p>
                         )}
+                        {(() => {
+                          const reel = getReelInfo(plato.videoUrl);
+                          if (!reel) return null;
+                          return (
+                            <a
+                              href={reel.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-[#c9a84c]/15 to-[#e8c770]/10 hover:from-[#c9a84c]/25 hover:to-[#e8c770]/20 border border-[#c9a84c]/30 text-[#c9a84c] text-[11px] font-semibold transition-all mt-1 w-fit shadow-sm"
+                            >
+                              <span>{reel.icon}</span>
+                              <span>{reel.label}</span>
+                              <span className="text-[9px] opacity-70">↗</span>
+                            </a>
+                          );
+                        })()}
                       </div>
 
                       <div className="pt-2 flex items-center justify-between border-t border-white/[0.04]">

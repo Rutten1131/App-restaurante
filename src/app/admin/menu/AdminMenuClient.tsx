@@ -4,6 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import MesasQRManager from "./MesasQRManager";
+import RecipeEditorField, { InsumoOption, IngredienteReceta } from "@/components/RecipeEditorField";
+import ImageUploadField from "@/components/ImageUploadField";
 import {
   crearPlatoAction,
   actualizarPlatoAction,
@@ -30,16 +32,38 @@ interface Plato {
   categoria?: { id: number; nombre: string } | null;
 }
 
+interface RecetaPlato {
+  platoId: number;
+  platoNombre: string;
+  platoPrecio: string;
+  categoriaNombre: string | null;
+  insumos: {
+    recetaId: number;
+    insumoId: number;
+    insumoNombre: string;
+    unidad: string;
+    cantidadUsada: string;
+  }[];
+}
+
 interface AdminMenuClientProps {
   initialPlatos: Plato[];
   categorias: Categoria[];
+  insumosDisponibles?: InsumoOption[];
+  recetasPlatos?: RecetaPlato[];
   initialTotalMesas?: number;
+  restauranteSlug?: string;
+  restauranteNombre?: string;
 }
 
 export default function AdminMenuClient({
   initialPlatos,
   categorias,
+  insumosDisponibles = [],
+  recetasPlatos = [],
   initialTotalMesas = 12,
+  restauranteSlug = "roma",
+  restauranteNombre = "Roma Pizzería",
 }: AdminMenuClientProps) {
   const [tabPrincipal, setTabPrincipal] = useState<"platos" | "mesas">("platos");
   const [platos, setPlatos] = useState<Plato[]>(initialPlatos);
@@ -168,7 +192,11 @@ export default function AdminMenuClient({
         </div>
 
         {tabPrincipal === "mesas" ? (
-          <MesasQRManager initialTotalMesas={initialTotalMesas} />
+          <MesasQRManager
+            initialTotalMesas={initialTotalMesas}
+            restauranteSlug={restauranteSlug}
+            restauranteNombre={restauranteNombre}
+          />
         ) : (
           <div className="space-y-10">
             {/* Sección: Catálogo de Platos con Filtros */}
@@ -437,28 +465,26 @@ export default function AdminMenuClient({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase text-[#c9a84c]">URL de Imagen</label>
-                  <input
-                    type="text"
-                    name="imagenUrl"
-                    defaultValue={editingPlato.imagenUrl ?? ""}
-                    placeholder="/images/..."
-                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
+              {/* Imagen del Plato (Base64 o URL) */}
+              <ImageUploadField
+                name="imagenUrl"
+                label="Foto del Plato"
+                defaultValue={editingPlato.imagenUrl ?? ""}
+                placeholder="/images/hero-pizza.jpg"
+              />
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase text-[#c9a84c]">URL de Video / Reel</label>
-                  <input
-                    type="text"
-                    name="videoUrl"
-                    defaultValue={editingPlato.videoUrl ?? ""}
-                    placeholder="https://..."
-                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase text-[#c9a84c]">URL de Video / Reel (IG, TikTok, FB)</label>
+                <input
+                  type="text"
+                  name="videoUrl"
+                  defaultValue={editingPlato.videoUrl ?? ""}
+                  placeholder="https://www.instagram.com/reel/... o https://www.tiktok.com/@.../video/..."
+                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                />
+                <p className="text-[10px] text-[#8a8078]">
+                  Pega el enlace del reel de Instagram, TikTok o Facebook. Se mostrará como link directo en la carta.
+                </p>
               </div>
 
               <div className="space-y-1">
@@ -483,6 +509,21 @@ export default function AdminMenuClient({
                   <option value="false">Agotado / No disponible</option>
                 </select>
               </div>
+
+              {/* Editor de Receta - descuento de inventario */}
+              <RecipeEditorField
+                insumosDisponibles={insumosDisponibles}
+                recetaInicial={
+                  recetasPlatos
+                    .find((r) => r.platoId === editingPlato.id)
+                    ?.insumos.map((ins) => ({
+                      insumoId: ins.insumoId,
+                      insumoNombre: ins.insumoNombre,
+                      unidad: ins.unidad,
+                      cantidadUsada: ins.cantidadUsada,
+                    })) || []
+                }
+              />
 
               <div className="flex justify-end gap-3 pt-3">
                 <button
@@ -669,31 +710,30 @@ export default function AdminMenuClient({
                   </select>
                 </div>
 
-                {/* URL de Imagen */}
-                <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                    URL de Imagen (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    name="imagenUrl"
-                    placeholder="/images/hero-pizza.jpg o https://..."
-                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
+              </div>
 
-                {/* URL de Video */}
-                <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
-                    URL de Video / Reel (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    name="videoUrl"
-                    placeholder="https://instagram.com/reel/... o YouTube"
-                    className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
-                  />
-                </div>
+              {/* Imagen del Plato (Base64 o URL) */}
+              <ImageUploadField
+                name="imagenUrl"
+                label="Foto del Plato"
+                defaultValue=""
+                placeholder="/images/hero-pizza.jpg"
+              />
+
+              {/* URL de Video / Reel */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#c9a84c]">
+                  URL de Video / Reel (IG, TikTok, FB) — Opcional
+                </label>
+                <input
+                  type="text"
+                  name="videoUrl"
+                  placeholder="https://www.instagram.com/reel/... o https://www.tiktok.com/@.../video/..."
+                  className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
+                />
+                <p className="text-[10px] text-[#8a8078]">
+                  Pega el enlace del reel de Instagram, TikTok o Facebook. Se mostrará como link directo en la carta.
+                </p>
               </div>
 
               {/* Descripción */}
@@ -708,6 +748,12 @@ export default function AdminMenuClient({
                   className="w-full bg-[#0a0908] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[#f5f0e8] focus:border-[#c9a84c] focus:outline-none"
                 />
               </div>
+
+              {/* Receta de Inventario */}
+              <RecipeEditorField
+                insumosDisponibles={insumosDisponibles}
+                recetaInicial={[]
+              }/>
 
               {/* Botones */}
               <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.06]">

@@ -5,6 +5,8 @@ import { guardarConfiguracionMesasAction } from "./actions";
 
 interface MesasQRManagerProps {
   initialTotalMesas: number;
+  restauranteSlug?: string;
+  restauranteNombre?: string;
 }
 
 const s = { width: "1em", height: "1em", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, viewBox: "0 0 24 24" };
@@ -28,7 +30,11 @@ function IcPrinter({ className }: { className?: string }) {
   return <svg {...s} className={className}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
 }
 
-export default function MesasQRManager({ initialTotalMesas }: MesasQRManagerProps) {
+export default function MesasQRManager({
+  initialTotalMesas,
+  restauranteSlug = "roma",
+  restauranteNombre = "Roma Pizzería",
+}: MesasQRManagerProps) {
   const [totalMesas, setTotalMesas] = useState(initialTotalMesas || 12);
   const [origin, setOrigin] = useState("https://app-restaurante-rose.vercel.app");
   const [guardando, setGuardando] = useState(false);
@@ -143,7 +149,7 @@ export default function MesasQRManager({ initialTotalMesas }: MesasQRManagerProp
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {arrayMesas.map((numMesa) => {
           const mesaParam = String(numMesa);
-          const targetUrl = `${origin}/app/menu?mesa=${mesaParam}`;
+          const targetUrl = `${origin}/r/${restauranteSlug}/menu?mesa=${mesaParam}`;
 
           return (
             <div
@@ -165,7 +171,7 @@ export default function MesasQRManager({ initialTotalMesas }: MesasQRManagerProp
                 </div>
 
                 <div className="text-[10px] font-mono text-[#8a8078] truncate">
-                  /app/menu?mesa={numMesa}
+                  /r/{restauranteSlug}/menu?mesa={numMesa}
                 </div>
               </div>
 
@@ -192,7 +198,7 @@ export default function MesasQRManager({ initialTotalMesas }: MesasQRManagerProp
                   Código QR · Mesa {mesaSeleccionadaQR}
                 </h3>
                 <p className="text-xs text-[#8a8078]">
-                  Roma Pizzería · Menú Digital
+                  {restauranteNombre} · Menú Digital
                 </p>
               </div>
               <button
@@ -208,24 +214,24 @@ export default function MesasQRManager({ initialTotalMesas }: MesasQRManagerProp
             <div className="bg-white p-4 rounded-2xl flex items-center justify-center shadow-2xl aspect-square max-w-[240px] mx-auto">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(`${origin}/app/menu?mesa=${mesaSeleccionadaQR}`)}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(`${origin}/r/${restauranteSlug}/menu?mesa=${mesaSeleccionadaQR}`)}`}
                 alt={`Código QR Mesa ${mesaSeleccionadaQR}`}
                 className="w-full h-full object-contain"
               />
             </div>
 
             <div className="text-[11px] font-mono text-[#c9a84c] bg-black/60 px-3 py-1.5 rounded-xl border border-white/5 truncate text-center">
-              {origin}/app/menu?mesa={mesaSeleccionadaQR}
+              {origin}/r/{restauranteSlug}/menu?mesa={mesaSeleccionadaQR}
             </div>
 
             {/* Acciones */}
             <div className="space-y-2.5 pt-2 border-t border-white/[0.06]">
               <div className="grid grid-cols-2 gap-2">
                 <a
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`${origin}/app/menu?mesa=${mesaSeleccionadaQR}`)}`}
+                  href={`https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`${origin}/r/${restauranteSlug}/menu?mesa=${mesaSeleccionadaQR}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  download={`QR_Mesa_${mesaSeleccionadaQR}_Roma.png`}
+                  download={`QR_Mesa_${mesaSeleccionadaQR}_${restauranteSlug}.png`}
                   className="py-2.5 bg-[#c9a84c] hover:brightness-110 text-[#0a0908] font-bold text-xs rounded-xl transition-all text-center flex items-center justify-center gap-1.5 shadow-md shadow-[#c9a84c]/20"
                 >
                   <IcDownload className="w-3.5 h-3.5" />
@@ -233,7 +239,7 @@ export default function MesasQRManager({ initialTotalMesas }: MesasQRManagerProp
                 </a>
 
                 <a
-                  href={`${origin}/app/menu?mesa=${mesaSeleccionadaQR}`}
+                  href={`${origin}/r/${restauranteSlug}/menu?mesa=${mesaSeleccionadaQR}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-2.5 bg-white/[0.06] hover:bg-white/[0.12] text-white font-semibold text-xs rounded-xl border border-white/[0.08] transition-all text-center flex items-center justify-center gap-1.5"
@@ -245,7 +251,7 @@ export default function MesasQRManager({ initialTotalMesas }: MesasQRManagerProp
 
               <button
                 type="button"
-                onClick={() => handleCopiarEnlace(mesaSeleccionadaQR, `${origin}/app/menu?mesa=${mesaSeleccionadaQR}`)}
+                onClick={() => handleCopiarEnlace(mesaSeleccionadaQR, `${origin}/r/${restauranteSlug}/menu?mesa=${mesaSeleccionadaQR}`)}
                 className="w-full py-2 bg-black/40 hover:bg-black/80 text-[#8a8078] hover:text-white rounded-xl text-xs font-medium border border-white/[0.04] transition-all flex items-center justify-center gap-1.5"
               >
                 {copiadoIdx === mesaSeleccionadaQR ? (

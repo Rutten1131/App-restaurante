@@ -16,6 +16,7 @@ type ActionResult<T = object> = T | { error: string };
 export async function registrarClienteAction(
   formData: FormData
 ): Promise<ActionResult<{ clienteId: number; isNew: boolean }>> {
+  const restauranteId = Number(formData.get("restauranteId")) || 1;
   const nombre = (formData.get("nombre") as string)?.trim();
   const telefono = (formData.get("telefono") as string)?.trim();
   const email = (formData.get("email") as string)?.trim() || null;
@@ -27,6 +28,7 @@ export async function registrarClienteAction(
 
   try {
     const clienteId = await upsertClienteFidelizacion({
+      restauranteId,
       nombre,
       telefono,
       email,
@@ -50,10 +52,12 @@ export async function guardarEncuestaAction(
   formData: FormData
 ): Promise<ActionResult<{ ok: true }>> {
   const clienteId = Number(formData.get("clienteId"));
+  const restauranteId = Number(formData.get("restauranteId")) || 1;
   if (!clienteId) return { error: "Sesión inválida. Vuelve al paso 1." };
 
   try {
     await insertarEncuesta({
+      restauranteId,
       clienteId,
       platFavorito: (formData.get("platFavorito") as string) || null,
       frecuenciaVisita: (formData.get("frecuenciaVisita") as string) || null,
@@ -72,12 +76,13 @@ export async function guardarEncuestaAction(
 
 /**
  * Paso 3 (fidelización) / Paso 2 (reseña) – Guardar calificación del servicio.
- * Si la calificación es de 1, 2 o 3 estrellas, envía alerta inmediata a WhatsApp (+593 96 341 0409).
+ * Si la calificación es de 1, 2 o 3 estrellas, envía alerta inmediata a WhatsApp.
  */
 export async function guardarResenaAction(
   formData: FormData
 ): Promise<ActionResult<{ ok: true; calificacion: number }>> {
   const clienteId = Number(formData.get("clienteId")) || null;
+  const restauranteId = Number(formData.get("restauranteId")) || 1;
   const calificacion = Number(formData.get("calificacion"));
   const comentario = (formData.get("comentario") as string)?.trim() || null;
 
@@ -86,7 +91,7 @@ export async function guardarResenaAction(
   }
 
   try {
-    await insertarResena({ clienteId, calificacion, comentario });
+    await insertarResena({ restauranteId, clienteId, calificacion, comentario });
 
     // Notificación automática a WhatsApp si la calificación es de 1, 2 o 3 estrellas
     if (calificacion <= 3) {

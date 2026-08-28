@@ -10,7 +10,12 @@ import {
 } from "@/lib/evolution/whatsapp";
 import { revalidatePath } from "next/cache";
 
+import { getAdminSession } from "@/lib/auth";
+
 export async function crearClienteAction(formData: FormData) {
+  const session = await getAdminSession();
+  const restauranteId = session?.restauranteId ?? 1;
+
   const nombre = formData.get("nombre") as string;
   const telefonoRaw = formData.get("telefono") as string;
   const email = formData.get("email") as string;
@@ -21,7 +26,7 @@ export async function crearClienteAction(formData: FormData) {
 
   // Verificar si ya existe un cliente con ese teléfono (normalizado)
   if (telefonoNorm) {
-    const existente = await buscarClientePorTelefono(telefonoNorm);
+    const existente = await buscarClientePorTelefono(telefonoNorm, restauranteId);
     if (existente) {
       // Ya existe, no duplicar
       revalidatePath("/admin/clientes");
@@ -33,6 +38,7 @@ export async function crearClienteAction(formData: FormData) {
   const numeroCliente = `cliente-${randomNum}`;
 
   await registrarCliente({
+    restauranteId,
     numeroCliente,
     nombre,
     telefono: telefonoNorm || undefined,

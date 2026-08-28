@@ -15,6 +15,12 @@ interface PlatoDb {
 
 interface HomeClientProps {
   initialPlatos?: PlatoDb[];
+  restauranteNombre?: string;
+  restauranteSlug?: string;
+  restauranteTagline?: string;
+  restauranteCiudad?: string;
+  restauranteTelefono?: string;
+  restauranteWhatsapp?: string;
 }
 
 const fallbackHeroDishes = [
@@ -99,7 +105,20 @@ const menuPreview = [
   },
 ];
 
-export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
+export default function HomeClient({
+  initialPlatos = [],
+  restauranteNombre = "Roma Restaurante Pizzería",
+  restauranteSlug = "roma",
+  restauranteTagline = "25 años encendiendo la leña cada día en Loja. Masa madurada durante 48 horas, ingredientes italianos selectos y la calidez de nuestra casa para recibir a tu familia.",
+  restauranteCiudad = "Loja",
+  restauranteTelefono = "098 767 0140",
+  restauranteWhatsapp = "593987670140",
+}: HomeClientProps) {
+  const menuUrl = `/r/${restauranteSlug}/menu`;
+  const reservaUrl = `/r/${restauranteSlug}/reserva`;
+  const nosotrosUrl = `/r/${restauranteSlug}/nosotros`;
+  const contactoUrl = `/r/${restauranteSlug}/contacto`;
+
   // Convertir platos de la base de datos a formato de heroDishes o usar fallback
   const heroDishes =
     initialPlatos && initialPlatos.length > 0
@@ -182,7 +201,7 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
               {/* Titular Principal */}
               <div className="space-y-2">
                 <span className="block font-script text-3xl sm:text-4xl lg:text-5xl text-[#c9a84c] animate-float" style={{ animationDuration: "6s" }}>
-                  Benvenuti a Roma
+                  Benvenuti a {restauranteNombre.split(" ")[0]}
                 </span>
                 <h1 className="font-serif text-4xl sm:text-6xl lg:text-6xl font-extrabold text-[#f5f0e8] leading-[1.08] tracking-tight">
                   La mesa a la que <br />
@@ -199,13 +218,13 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
 
               {/* Párrafo descriptivo */}
               <p className="text-sm sm:text-base text-[#8a8078] leading-relaxed max-w-xl">
-                25 años encendiendo la leña cada día en Loja. Masa madurada durante 48 horas, ingredientes italianos selectos y la calidez de nuestra casa para recibir a tu familia.
+                {restauranteTagline}
               </p>
 
               {/* Botones de Acción */}
               <div className="flex flex-wrap items-center gap-4 pt-1">
                 <a
-                  href={`https://wa.me/593987670140?text=Hola%20Roma%20Pizzeria,%20quisiera%20pedir:%20${encodeURIComponent(currentDish.nombre)}`}
+                  href={`https://wa.me/${restauranteWhatsapp}?text=Hola%20${encodeURIComponent(restauranteNombre)},%20quisiera%20pedir:%20${encodeURIComponent(currentDish.nombre)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group relative inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-[#c62828] to-[#e53935] text-white text-[13px] font-semibold uppercase tracking-widest rounded-full shadow-[0_0_35px_-4px_rgba(220,38,38,0.5)] hover:shadow-[0_0_50px_-2px_rgba(220,38,38,0.8)] transition-all duration-300 transform hover:-translate-y-1 overflow-hidden"
@@ -218,7 +237,7 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
                 </a>
 
                 <Link
-                  href="/reserva"
+                  href={reservaUrl}
                   className="inline-flex items-center gap-2 px-7 py-4 text-[13px] font-semibold uppercase tracking-widest text-[#f5f0e8] border border-[#c9a84c]/40 rounded-full hover:border-[#c9a84c] hover:text-[#c9a84c] hover:bg-[#c9a84c]/10 transition-all duration-300 transform hover:-translate-y-0.5"
                 >
                   Reservar Mesa
@@ -233,7 +252,7 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
                 </div>
                 <div className="hidden sm:block text-white/20">•</div>
                 <div className="flex items-center gap-1.5 text-[#c9a84c]">
-                  <span>★ 4.9 en Loja</span>
+                  <span>★ 4.9 en {restauranteCiudad}</span>
                   <span className="text-[#8a8078]">(+2,400 opiniones)</span>
                 </div>
               </div>
@@ -509,7 +528,7 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
 
                 <div className="px-6 pb-6">
                   <Link
-                    href={`/menu#${dish.id}`}
+                    href={menuUrl}
                     className="flex items-center justify-between text-[12px] font-semibold text-[#c9a84c]/70 hover:text-[#c9a84c] transition-colors group/link"
                   >
                     <span>Ver en la carta</span>
@@ -545,7 +564,7 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
                 Ingredientes frescos, recetas con alma y una presentación que honra la tradición.
               </p>
               <Link
-                href="/app/menu"
+                href={menuUrl}
                 className="group inline-flex items-center gap-3 px-7 py-3.5 bg-[#c62828] text-[#f5f0e8] text-[13px] font-semibold uppercase tracking-widest rounded-full hover:bg-[#e53935] transition-all duration-300 shadow-[0_0_30px_-6px_rgba(198,40,40,0.25)]"
               >
                 Ver carta completa
@@ -609,7 +628,7 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
             Tu mesa te espera
           </span>
           <h2 className="font-serif text-[clamp(1.5rem,4vw,2.5rem)] font-bold text-[#f5f0e8] leading-tight">
-            Reserva tu experiencia en Roma <br className="hidden sm:block" />
+            Reserva tu experiencia en {restauranteNombre.split(" ")[0]} <br className="hidden sm:block" />
             o pide directamente a tu puerta
           </h2>
 
@@ -624,19 +643,19 @@ export default function HomeClient({ initialPlatos = [] }: HomeClientProps) {
               <svg className="w-3.5 h-3.5 text-[#2e7d32]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
               </svg>
-              098 767 0140
+              {restauranteTelefono}
             </span>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Link
-              href="/reserva"
+              href={reservaUrl}
               className="w-full sm:w-auto px-8 py-4 bg-[#c9a84c] text-[#0a0908] text-[13px] font-semibold uppercase tracking-widest rounded-full hover:bg-[#e8d48b] transition-all duration-300 shadow-[0_0_30px_-6px_rgba(201,168,76,0.35)] text-center"
             >
               Reservar mesa online
             </Link>
             <a
-              href="https://wa.me/593987670140?text=Hola%20Roma,%20quisiera%20hacer%20un%20pedido"
+              href={`https://wa.me/${restauranteWhatsapp}?text=Hola%20${encodeURIComponent(restauranteNombre)},%20quisiera%20hacer%20un%20pedido`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full sm:w-auto px-8 py-4 bg-[#2e7d32] text-white text-[13px] font-semibold uppercase tracking-widest rounded-full hover:bg-[#388e3c] transition-all duration-300 flex items-center justify-center gap-2"

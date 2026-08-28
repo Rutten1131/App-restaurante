@@ -46,6 +46,7 @@ async function seedInventario() {
       insumosMap.set(ins.nombre, existing[0].id);
     } else {
       const [inserted] = await db.insert(insumos).values({
+        restauranteId: 1,
         nombre: ins.nombre,
         unidad: ins.unidad,
         stockActual: ins.stockActual,

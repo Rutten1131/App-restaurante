@@ -3,7 +3,12 @@
 import { emitirFacturaComanda } from "@/db/queries/facturas";
 import { revalidatePath } from "next/cache";
 
+import { getAdminSession } from "@/lib/auth";
+
 export async function emitirFacturaAction(formData: FormData) {
+  const session = await getAdminSession();
+  const restauranteId = session?.restauranteId ?? 1;
+
   const pedidoId = Number(formData.get("pedidoId"));
   const clienteId = Number(formData.get("clienteId")) || null;
   const nombreCliente = (formData.get("nombreCliente") as string)?.trim() || "CONSUMIDOR FINAL";
@@ -20,6 +25,7 @@ export async function emitirFacturaAction(formData: FormData) {
 
   try {
     const facturaId = await emitirFacturaComanda({
+      restauranteId,
       pedidoId,
       clienteId,
       nombreCliente,

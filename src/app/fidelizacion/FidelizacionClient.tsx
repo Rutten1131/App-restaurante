@@ -37,9 +37,23 @@ type Step = 1 | 2 | 3 | "done";
 
 interface FidelizacionClientProps {
   googleReviewUrl: string;
+  restauranteId?: number;
+  restauranteNombre?: string;
+  restauranteSlug?: string;
+  logoUrl?: string | null;
+  colorPrimario?: string;
+  ciudad?: string;
 }
 
-export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClientProps) {
+export default function FidelizacionClient({
+  googleReviewUrl,
+  restauranteId = 1,
+  restauranteNombre = "Roma Restaurante Pizzería",
+  restauranteSlug = "roma",
+  logoUrl,
+  colorPrimario = "#c9a84c",
+  ciudad = "Loja",
+}: FidelizacionClientProps) {
   const [modo, setModo] = useState<ModoFlujo>("promo_encuesta");
   const [step, setStep] = useState<Step>(1);
   const [clienteId, setClienteId] = useState<number | null>(null);
@@ -78,6 +92,7 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
     }
     setError(null);
     const fd = new FormData();
+    fd.append("restauranteId", String(restauranteId));
     fd.append("nombre", nombre);
     fd.append("telefono", telefono);
     fd.append("email", email);
@@ -105,6 +120,7 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
     }
     setError(null);
     const fd = new FormData();
+    fd.append("restauranteId", String(restauranteId));
     fd.append("clienteId", String(clienteId));
     fd.append("frecuenciaVisita", frecuencia);
     fd.append("platFavorito", platFavorito);
@@ -116,7 +132,6 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
     startTransition(async () => {
       const res = await guardarEncuestaAction(fd);
       if ("error" in res) {
-        // Continuamos de todas formas a calificación si hubo error de tabla secundaria
         setStep(3);
       } else {
         setStep(3);
@@ -132,6 +147,7 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
     }
     setError(null);
     const fd = new FormData();
+    fd.append("restauranteId", String(restauranteId));
     fd.append("clienteId", String(clienteId));
     fd.append("calificacion", String(stars));
     fd.append("comentario", comentario);
@@ -147,6 +163,8 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
     });
   };
 
+  const menuUrl = restauranteSlug ? `/r/${restauranteSlug}/menu` : "/app/menu";
+
   const inputCls =
     "w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 focus:border-[#c9a84c] focus:outline-none focus:ring-1 focus:ring-[#c9a84c]/30 transition-all text-sm";
   const labelCls =
@@ -157,12 +175,12 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
       {/* Botón Volver al Menú */}
       <div className="w-full max-w-md flex items-center justify-between mb-4">
         <Link
-          href="/app/menu"
+          href={menuUrl}
           className="inline-flex items-center gap-1.5 text-xs text-[#8a8078] hover:text-[#c9a84c] transition-colors py-1.5 px-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
         >
           <span>←</span> Volver al Menú
         </Link>
-        <span className="text-[10px] text-[#8a8078] uppercase tracking-wider">Roma Loja</span>
+        <span className="text-[10px] text-[#8a8078] uppercase tracking-wider">{restauranteNombre.split(" ")[0]} {ciudad}</span>
       </div>
 
       {/* Header Marca con Logo Real */}
@@ -170,13 +188,13 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
         <div className="relative w-20 h-20 rounded-full overflow-hidden ring-4 ring-[#c9a84c]/40 shadow-2xl mb-3 bg-[#141210]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/logo-roma.jpg"
-            alt="Roma Restaurante Pizzería Logo"
+            src={logoUrl || "/images/logo-roma.jpg"}
+            alt={`${restauranteNombre} Logo`}
             className="w-full h-full object-cover"
           />
         </div>
         <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#f5f0e8] italic tracking-tight">
-          Roma Restaurante Pizzería
+          {restauranteNombre}
         </h1>
         <p className="text-xs text-[#8a8078] mt-1">Club de Fidelización & Experiencia</p>
       </div>
@@ -594,7 +612,7 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
                 </span>
                 <p className="text-2xl font-bold text-white mt-2">🍕 1 Pizza Gratis</p>
                 <p className="text-xs text-[#8a8078] mt-1">
-                  Muestra esta pantalla al personal de Roma al pagar o ordenar tu cuenta.
+                  Muestra esta pantalla al personal de {restauranteNombre.split(" ")[0]} al pagar o ordenar tu cuenta.
                 </p>
               </div>
             )}
@@ -615,7 +633,7 @@ export default function FidelizacionClient({ googleReviewUrl }: FidelizacionClie
 
             <div className="pt-2">
               <Link
-                href="/app/menu"
+                href={menuUrl}
                 className="text-xs text-[#c9a84c] underline hover:text-[#e8c770] transition-colors"
               >
                 Volver a la Carta / Menú

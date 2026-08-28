@@ -3,11 +3,12 @@ import { db } from "@/db";
 import { facturas, pedidos, clientes, itemsPedido, platos } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 
-export async function getFacturasCompletas() {
+export async function getFacturasCompletas(restauranteId = 1) {
   try {
     const lista = await db
       .select({
         id: facturas.id,
+        restauranteId: facturas.restauranteId,
         pedidoId: facturas.pedidoId,
         clienteId: facturas.clienteId,
         emailEnvioDestino: facturas.emailEnvioDestino,
@@ -24,6 +25,7 @@ export async function getFacturasCompletas() {
       .from(facturas)
       .leftJoin(clientes, eq(facturas.clienteId, clientes.id))
       .leftJoin(pedidos, eq(facturas.pedidoId, pedidos.id))
+      .where(eq(facturas.restauranteId, restauranteId))
       .orderBy(desc(facturas.creadaEn));
 
     // Obtener items para cada factura
@@ -49,6 +51,7 @@ export async function getFacturasCompletas() {
 }
 
 export async function emitirFacturaComanda(data: {
+  restauranteId?: number;
   pedidoId: number;
   clienteId?: number | null;
   nombreCliente: string;
@@ -61,6 +64,7 @@ export async function emitirFacturaComanda(data: {
   estado?: "simulada" | "enviada" | "oficial_sri";
 }) {
   const result = await db.insert(facturas).values({
+    restauranteId: data.restauranteId ?? 1,
     pedidoId: data.pedidoId,
     clienteId: data.clienteId || null,
     emailEnvioDestino: data.emailEnvioDestino || null,

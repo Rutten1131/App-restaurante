@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { crearInsumoAction, actualizarStockAction } from "./actions";
+import { useRouter } from "next/navigation";
+import {
+  crearInsumoAction,
+  actualizarStockAction,
+  guardarRecetaInventarioAction,
+  crearPlatoYRecetaAction,
+} from "./actions";
+import RecipeEditorField, { InsumoOption } from "@/components/RecipeEditorField";
 
 interface Insumo {
   id: number;
@@ -63,19 +70,26 @@ function IcExternalLink({ className }: { className?: string }) {
 
 export default function InventarioClient({
   insumos,
-  recetas,
+  recetas: initialRecetas,
   movimientos,
 }: {
   insumos: Insumo[];
   recetas: RecetaPlato[];
   movimientos: Movimiento[];
 }) {
-  const [tabActiva, setTabActiva] = useState<"insumos" | "recetas" | "movimientos">("insumos");
+  const router = useRouter();
+  const [tabActiva, setTabActiva] = useState<"insumos" | "recetas" | "movimientos">("recetas");
+  const [recetasList, setRecetasList] = useState<RecetaPlato[]>(initialRecetas);
   const [busquedaReceta, setBusquedaReceta] = useState("");
+  const [editingRecetaPlato, setEditingRecetaPlato] = useState<RecetaPlato | null>(null);
+  const [showNuevoPlatoModal, setShowNuevoPlatoModal] = useState(false);
+  const [isSavingReceta, setIsSavingReceta] = useState(false);
+  const [isCreatingPlato, setIsCreatingPlato] = useState(false);
 
   const insumosBajoStock = insumos.filter((i) => Number(i.stockActual) <= Number(i.stockMinimo));
+  const platosConRecetaCount = recetasList.filter((r) => r.insumos.length > 0).length;
 
-  const recetasFiltradas = recetas.filter((r) =>
+  const recetasFiltradas = recetasList.filter((r) =>
     r.platoNombre.toLowerCase().includes(busquedaReceta.toLowerCase()) ||
     (r.categoriaNombre && r.categoriaNombre.toLowerCase().includes(busquedaReceta.toLowerCase()))
   );
@@ -113,7 +127,12 @@ export default function InventarioClient({
             }`}
           >
             <IcBookOpen className="w-4 h-4" />
-            <span>Recetas & Escandallos de Platos ({recetas.length})</span>
+            <span>Recetas de Platos ({recetasList.length})</span>
+            {platosConRecetaCount < recetasList.length && (
+              <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-bold ${tabActiva === "recetas" ? "bg-[#0a0908] text-[#c9a84c]" : "bg-[#ff9800]/20 text-[#ffb74d]"}`}>
+                {platosConRecetaCount} listas
+              </span>
+            )}
           </button>
 
           <button
@@ -298,79 +317,386 @@ export default function InventarioClient({
       {/* ── TAB 2: RECETAS & GASTO DE INSUMOS POR PLATO ──────────────────── */}
       {tabActiva === "recetas" && (
         <div className="bg-[#141210] border border-white/[0.06] rounded-3xl p-6 sm:p-7 space-y-6 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
             <div>
-              <h2 className="font-serif text-lg font-bold text-[#f5f0e8] flex items-center gap-2">
-                <IcBookOpen className="w-4.5 h-4.5 text-[#c9a84c]" /> Fichas Técnicas & Recetas de Insumos por Plato
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-serif text-lg font-bold text-[#f5f0e8] flex items-center gap-2">
+                  <IcBookOpen className="w-4.5 h-4.5 text-[#c9a84c]" /> Fichas Técnicas & Recetas de Insumos por Plato
+                </h2>
+                <span className="text-[10px] font-mono bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20 px-2 py-0.5 rounded-full font-bold">
+                  {platosConRecetaCount}/{recetasList.length} con receta
+                </span>
+              </div>
               <p className="text-xs text-[#8a8078] mt-0.5">
-                Aquí se detalla la cantidad exacta de ingredientes que consume cada plato al entrar a cocina.
+                Configura qué insumos y en qué cantidad consume cada plato al entrar la orden a cocina.
               </p>
             </div>
 
-            <div className="relative w-full sm:w-72">
-              <input
-                type="text"
-                placeholder="Buscar plato o categoría..."
-                value={busquedaReceta}
-                onChange={(e) => setBusquedaReceta(e.target.value)}
-                className="w-full bg-[#0a0908] border border-white/10 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
-              />
-              <IcSearch className="w-4 h-4 text-[#8a8078] absolute left-3 top-2.5 pointer-events-none" />
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative w-full sm:w-56">
+                <input
+                  type="text"
+                  placeholder="Buscar plato..."
+                  value={busquedaReceta}
+                  onChange={(e) => setBusquedaReceta(e.target.value)}
+                  className="w-full bg-[#0a0908] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                />
+                <IcSearch className="w-3.5 h-3.5 text-[#8a8078] absolute left-2.5 top-2.5 pointer-events-none" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowNuevoPlatoModal(true)}
+                className="px-4 py-2 bg-[#c9a84c] hover:bg-[#e8c770] text-black font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-lg shadow-[#c9a84c]/20 uppercase tracking-wider"
+              >
+                <span>+</span> Crear Plato & Receta
+              </button>
+
+              <Link
+                href="/admin/menu"
+                className="px-3.5 py-2 bg-white/[0.05] hover:bg-white/10 border border-white/10 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1"
+              >
+                <span>Menú</span>
+                <IcExternalLink className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recetasFiltradas.map((r) => (
-              <div
-                key={r.platoId}
-                className="bg-[#0a0908] border border-white/[0.06] hover:border-[#c9a84c]/40 rounded-2xl p-4 space-y-3 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2 border-b border-white/[0.04] pb-2.5">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-[#c9a84c] tracking-wider block">
-                      {r.categoriaNombre || "Plato Principal"}
-                    </span>
-                    <h3 className="font-serif font-bold text-sm text-[#f5f0e8]">
-                      {r.platoNombre}
-                    </h3>
-                  </div>
-                  <span className="font-mono font-bold text-xs text-[#c9a84c] bg-[#c9a84c]/10 px-2 py-0.5 rounded-lg">
-                    ${Number(r.platoPrecio).toFixed(2)}
-                  </span>
-                </div>
+          {recetasList.length === 0 ? (
+            /* Estado cuando el restaurante aún no tiene platos creados */
+            <div className="p-8 sm:p-12 text-center bg-black/40 border border-dashed border-white/15 rounded-3xl space-y-4 max-w-xl mx-auto">
+              <div className="w-16 h-16 bg-[#c9a84c]/10 border border-[#c9a84c]/30 rounded-2xl flex items-center justify-center text-3xl mx-auto">
+                🥗
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-serif text-lg font-bold text-white">
+                  Aún no hay platos registrados en este restaurante
+                </h3>
+                <p className="text-xs text-[#8a8078] leading-relaxed">
+                  Para descontar inventario automáticamente en cocina, primero registra tus platos y asígnales sus insumos y cantidades.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNuevoPlatoModal(true)}
+                  className="w-full sm:w-auto px-6 py-3 bg-[#c9a84c] hover:bg-[#e8c770] text-black font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-[#c9a84c]/20"
+                >
+                  ⚡ Crear Primer Plato con su Receta
+                </button>
+                <Link
+                  href="/admin/menu"
+                  className="w-full sm:w-auto px-5 py-3 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Ir al Catálogo de Menú →
+                </Link>
+              </div>
+            </div>
+          ) : recetasFiltradas.length === 0 ? (
+            <div className="text-center py-12 text-[#8a8078] text-xs space-y-2">
+              <p>No se encontraron platos con los términos de búsqueda.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recetasFiltradas.map((r) => {
+                const tieneReceta = r.insumos && r.insumos.length > 0;
 
-                <div className="space-y-1.5 text-xs">
-                  <span className="text-[10px] text-[#8a8078] uppercase font-bold tracking-wider block">
-                    Insumos Consumidos por Unidad:
-                  </span>
-                  {r.insumos.map((ins) => (
-                    <div
-                      key={ins.recetaId}
-                      className="flex items-center justify-between py-1 px-2 rounded-lg bg-white/[0.02] border border-white/[0.03]"
-                    >
-                      <span className="text-[#f5f0e8]">{ins.insumoNombre}</span>
-                      <span className="font-mono font-bold text-[#c9a84c]">
-                        {ins.cantidadUsada} {ins.unidad}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-2 border-t border-white/[0.04] flex justify-between items-center text-[11px]">
-                  <span className="text-[#8a8078]">
-                    {r.insumos.length} ingrediente(s) en receta
-                  </span>
-                  <Link
-                    href="/admin/menu"
-                    className="text-[#c9a84c] hover:underline flex items-center gap-1 font-semibold"
+                return (
+                  <div
+                    key={r.platoId}
+                    className={`bg-[#0a0908] border rounded-2xl p-4 space-y-3 transition-all flex flex-col justify-between ${
+                      tieneReceta
+                        ? "border-white/[0.06] hover:border-[#c9a84c]/40"
+                        : "border-[#ff9800]/30 hover:border-[#ff9800] bg-[#ff9800]/[0.02]"
+                    }`}
                   >
-                    <span>Editar en Menú</span>
-                    <IcExternalLink className="w-3 h-3" />
-                  </Link>
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2 border-b border-white/[0.04] pb-2.5">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-[#c9a84c] tracking-wider block">
+                            {r.categoriaNombre || "Plato Principal"}
+                          </span>
+                          <h3 className="font-serif font-bold text-sm text-[#f5f0e8]">
+                            {r.platoNombre}
+                          </h3>
+                        </div>
+                        <span className="font-mono font-bold text-xs text-[#c9a84c] bg-[#c9a84c]/10 px-2 py-0.5 rounded-lg shrink-0">
+                          ${Number(r.platoPrecio).toFixed(2)}
+                        </span>
+                      </div>
+
+                      {tieneReceta ? (
+                        <div className="space-y-1.5 text-xs">
+                          <span className="text-[10px] text-[#8a8078] uppercase font-bold tracking-wider block">
+                            Insumos Consumidos por Unidad:
+                          </span>
+                          <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                            {r.insumos.map((ins) => (
+                              <div
+                                key={ins.recetaId || `${ins.insumoId}-${ins.cantidadUsada}`}
+                                className="flex items-center justify-between py-1 px-2 rounded-lg bg-white/[0.02] border border-white/[0.03]"
+                              >
+                                <span className="text-[#f5f0e8] truncate max-w-[140px]">{ins.insumoNombre}</span>
+                                <span className="font-mono font-bold text-[#c9a84c]">
+                                  {ins.cantidadUsada} {ins.unidad}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-[#ff9800]/10 border border-[#ff9800]/20 rounded-xl space-y-1 text-center">
+                          <span className="text-xs text-[#ffb74d] font-bold block">
+                            ⚠️ Sin receta asignada
+                          </span>
+                          <span className="text-[10px] text-[#8a8078] block">
+                            Este plato no descontará inventario al venderse.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-white/[0.04] flex justify-between items-center text-[11px] gap-2">
+                      <span className="text-[#8a8078]">
+                        {tieneReceta ? `${r.insumos.length} ingrediente(s)` : "Pendiente"}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setEditingRecetaPlato(r)}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 shadow-md ${
+                          tieneReceta
+                            ? "bg-white/[0.06] hover:bg-[#c9a84c] text-white hover:text-black border border-white/10"
+                            : "bg-[#c9a84c] hover:bg-[#e8c770] text-black shadow-[#c9a84c]/20"
+                        }`}
+                      >
+                        <span>{tieneReceta ? "✏️ Modificar Receta" : "+ Asignar Receta"}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MODAL 1: EDITAR / ASIGNAR RECETA A UN PLATO EXISTENTE ──────────── */}
+      {editingRecetaPlato && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141210] border border-white/15 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#c9a84c] tracking-wider block">
+                  {editingRecetaPlato.categoriaNombre || "Plato Principal"}
+                </span>
+                <h3 className="font-serif text-lg font-bold text-[#f5f0e8]">
+                  Receta: {editingRecetaPlato.platoNombre}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRecetaPlato(null)}
+                className="text-[#8a8078] hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setIsSavingReceta(true);
+                const fd = new FormData(e.currentTarget);
+                fd.set("platoId", String(editingRecetaPlato.platoId));
+
+                const res = await guardarRecetaInventarioAction(fd);
+                if (res?.success) {
+                  const recetaJson = fd.get("recetaJson") as string;
+                  const newItems = JSON.parse(recetaJson || "[]");
+
+                  // Actualizar estado local
+                  setRecetasList((prev) =>
+                    prev.map((r) =>
+                      r.platoId === editingRecetaPlato.platoId
+                        ? {
+                            ...r,
+                            insumos: newItems.map((item: any) => {
+                              const ins = insumos.find((i) => i.id === item.insumoId);
+                              return {
+                                recetaId: Date.now() + Math.random(),
+                                insumoId: item.insumoId,
+                                insumoNombre: ins?.nombre || "Insumo",
+                                unidad: ins?.unidad || "unidades",
+                                cantidadUsada: String(item.cantidadUsada),
+                              };
+                            }),
+                          }
+                        : r
+                    )
+                  );
+                  setEditingRecetaPlato(null);
+                  router.refresh();
+                } else {
+                  alert(res?.error || "Error al guardar la receta");
+                }
+                setIsSavingReceta(false);
+              }}
+              className="space-y-4"
+            >
+              <RecipeEditorField
+                insumosDisponibles={insumos}
+                recetaInicial={editingRecetaPlato.insumos.map((i) => ({
+                  insumoId: i.insumoId,
+                  insumoNombre: i.insumoNombre,
+                  unidad: i.unidad,
+                  cantidadUsada: i.cantidadUsada,
+                }))}
+              />
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setEditingRecetaPlato(null)}
+                  disabled={isSavingReceta}
+                  className="px-4 py-2.5 rounded-xl border border-white/10 text-xs text-[#8a8078] hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingReceta}
+                  className="px-5 py-2.5 bg-[#c9a84c] hover:bg-[#e8c770] text-black font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-[#c9a84c]/20 disabled:opacity-50"
+                >
+                  {isSavingReceta ? "Guardando..." : "Guardar Receta del Plato"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 2: CREAR NUEVO PLATO CON SU RECETA DESDE INVENTARIO ──────── */}
+      {showNuevoPlatoModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#141210] border border-white/15 rounded-3xl p-6 sm:p-8 max-w-xl w-full space-y-5 shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-white flex items-center gap-2">
+                  <span>🥗</span> Crear Nuevo Plato con Receta
+                </h3>
+                <p className="text-xs text-[#8a8078]">
+                  Crea un plato y define de inmediato los insumos que consumirá en inventario.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNuevoPlatoModal(false)}
+                className="text-[#8a8078] hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setIsCreatingPlato(true);
+                const fd = new FormData(e.currentTarget);
+
+                const res = await crearPlatoYRecetaAction(fd);
+                if (res?.success && res.platoId) {
+                  const nombre = fd.get("nombre") as string;
+                  const precio = fd.get("precio") as string;
+                  const recetaJson = fd.get("recetaJson") as string;
+                  const newItems = JSON.parse(recetaJson || "[]");
+
+                  const nuevoPlatoReceta: RecetaPlato = {
+                    platoId: res.platoId,
+                    platoNombre: nombre,
+                    platoPrecio: precio,
+                    categoriaNombre: "General",
+                    insumos: newItems.map((item: any) => {
+                      const ins = insumos.find((i) => i.id === item.insumoId);
+                      return {
+                        recetaId: Date.now() + Math.random(),
+                        insumoId: item.insumoId,
+                        insumoNombre: ins?.nombre || "Insumo",
+                        unidad: ins?.unidad || "unidades",
+                        cantidadUsada: String(item.cantidadUsada),
+                      };
+                    }),
+                  };
+
+                  setRecetasList((prev) => [nuevoPlatoReceta, ...prev]);
+                  setShowNuevoPlatoModal(false);
+                  router.refresh();
+                } else {
+                  alert(res?.error || "Error al crear el plato y receta");
+                }
+                setIsCreatingPlato(false);
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-white">Nombre del Plato *</label>
+                  <input
+                    type="text"
+                    name="nombre"
+                    required
+                    placeholder="Ej. Pizza Fugazzeta Especial"
+                    className="w-full bg-[#080706] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-white">Precio ($ USD) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="precio"
+                    required
+                    placeholder="12.50"
+                    className="w-full bg-[#080706] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:border-[#c9a84c] focus:outline-none"
+                  />
                 </div>
               </div>
-            ))}
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-white">Descripción (Opcional)</label>
+                <input
+                  type="text"
+                  name="descripcion"
+                  placeholder="Detalles de preparación..."
+                  className="w-full bg-[#080706] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+                />
+              </div>
+
+              {/* Selector de Receta */}
+              <RecipeEditorField
+                insumosDisponibles={insumos}
+                recetaInicial={[]}
+              />
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowNuevoPlatoModal(false)}
+                  disabled={isCreatingPlato}
+                  className="px-4 py-2.5 rounded-xl border border-white/10 text-xs text-[#8a8078] hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingPlato}
+                  className="px-5 py-2.5 bg-[#c9a84c] hover:bg-[#e8c770] text-black font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-[#c9a84c]/20 disabled:opacity-50"
+                >
+                  {isCreatingPlato ? "Creando Plato..." : "+ Guardar Plato y Receta"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

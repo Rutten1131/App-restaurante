@@ -3,10 +3,15 @@ import CocinaClient from "./CocinaClient";
 import LiveAutoRefresh from "../pedidos/LiveAutoRefresh";
 import { IconChefHat } from "../pedidos/Icons";
 
+import { getAdminSession } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminCocinaPage() {
-  const pedidos = await getPedidosCompletos();
+  const session = await getAdminSession();
+  const restId = session?.restauranteId ?? 1;
+
+  const pedidos = await getPedidosCompletos(restId);
 
   const pedidosCocina = pedidos
     .filter((p) => p.estado === "en_cocina")

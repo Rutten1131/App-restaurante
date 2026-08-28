@@ -16,7 +16,7 @@ export default async function AdminLayout({
     return <div className="min-h-screen bg-[#0a0908] text-[#f5f0e8]">{children}</div>;
   }
 
-  const data = await getDashboardData();
+  const data = await getDashboardData(session.restauranteId ?? 1);
   const metrics = {
     pedidosNuevos: data.pedidosNuevos,
     pedidosEnCocina: data.pedidosEnCocina,

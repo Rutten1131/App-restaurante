@@ -35,9 +35,13 @@ function IcUsers({ className }: { className?: string }) {
 
 import WhatsAppEvolutionCard from "./WhatsAppEvolutionCard";
 import AdminClientesListClient from "./AdminClientesListClient";
+import { getAdminSession } from "@/lib/auth";
 
 export default async function AdminClientesPage() {
-  const { clientes, alertas, resenas } = await getClientesConAlertas();
+  const session = await getAdminSession();
+  const restId = session?.restauranteId ?? 1;
+
+  const { clientes, alertas, resenas } = await getClientesConAlertas(restId);
   const googleReviewUrl =
     (await getConfiguracion("google_review_url")) ||
     process.env.NEXT_PUBLIC_GOOGLE_REVIEW_URL ||
@@ -164,7 +168,10 @@ export default async function AdminClientesPage() {
           </div>
 
           {/* Tarjeta del QR imprimible */}
-          <QRCodeCard />
+          <QRCodeCard
+            restauranteSlug={session?.restauranteSlug || "roma"}
+            restauranteNombre={session?.restauranteNombre || "Roma Pizzería"}
+          />
         </div>
       </div>
 

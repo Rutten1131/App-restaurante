@@ -535,6 +535,7 @@ async function main() {
     if (!categoriaExistente) {
       console.log(`-> Creando categoría: [${catData.orden}] ${catData.nombre}`);
       await db.insert(categorias).values({
+        restauranteId: 1,
         nombre: catData.nombre,
         orden: catData.orden,
       });
@@ -566,6 +567,7 @@ async function main() {
 
       if (!platoExistente) {
         await db.insert(platos).values({
+          restauranteId: 1,
           nombre: p.nombre,
           descripcion: p.descripcion,
           precio: p.precio,

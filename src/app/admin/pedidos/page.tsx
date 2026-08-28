@@ -7,12 +7,17 @@ import LiveAutoRefresh from "./LiveAutoRefresh";
 import Salon3DMap from "./Salon3DMap";
 import { IconClipboardList } from "./Icons";
 
+import { getAdminSession } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminPedidosPage() {
+  const session = await getAdminSession();
+  const restId = session?.restauranteId ?? 1;
+
   const [pedidos, facturas, mesasConfig] = await Promise.all([
-    getPedidosCompletos(),
-    getFacturasCompletas(),
+    getPedidosCompletos(restId),
+    getFacturasCompletas(restId),
     getConfiguracion("total_mesas"),
   ]);
 

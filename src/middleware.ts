@@ -4,7 +4,23 @@ import type { NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Solo aplicar en rutas /admin
+  // 1. Proteger rutas /superadmin
+  if (pathname.startsWith("/superadmin")) {
+    const superSession = request.cookies.get("saas_superadmin_session")?.value;
+    const isSuperLoginPage = pathname === "/superadmin/login";
+
+    if (!superSession && !isSuperLoginPage) {
+      const loginUrl = new URL("/superadmin/login", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (superSession && isSuperLoginPage) {
+      const superAdminUrl = new URL("/superadmin", request.url);
+      return NextResponse.redirect(superAdminUrl);
+    }
+  }
+
+  // 2. Proteger rutas /admin
   if (pathname.startsWith("/admin")) {
     const sessionCookie = request.cookies.get("roma_admin_session")?.value;
     const isLoginPage = pathname === "/admin/login";
@@ -26,5 +42,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/superadmin/:path*"],
 };
